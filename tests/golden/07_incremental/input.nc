@@ -1,0 +1,15 @@
+(staircase in G91 incremental mode)
+G21 G90
+T1 M6
+S6000 M3
+G0 X0 Y0 Z1
+G91
+G1 Z-2 F200
+G1 X5 F600
+Y5
+X5
+Y5
+X5
+G90
+G0 Z5
+M30

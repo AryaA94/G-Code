@@ -1,0 +1,9 @@
+(G83 peck drilling: 16 mm deep in 5 mm pecks)
+G21 G90 G17
+T2 M6
+S2000 M3
+G0 X0 Y0 Z10
+G98 G83 X5 Y5 Z-16 R1 Q5 F120
+X15
+G80
+M30

@@ -1,0 +1,20 @@
+{
+  "name": "Example 3-axis VMC",
+  "comment": "Numbers are in the range of a small benchtop mill. Change them to match yours.",
+  "max_rate_mm_min": { "x": 6000, "y": 6000, "z": 3000 },
+  "accel_mm_s2": { "x": 400, "y": 400, "z": 250 },
+  "max_feed_mm_min": 4000,
+  "junction_deviation_mm": 0.01,
+  "tool_change_time_s": 5,
+  "travel_mm": { "x": [-250, 250], "y": [-200, 200], "z": [-200, 0] },
+  "work_offsets": {
+    "G54": { "x": 0, "y": 0, "z": -100 },
+    "G55": { "x": 120, "y": 0, "z": -100 }
+  },
+  "tools": {
+    "1": { "diameter_mm": 6, "length_mm": 50, "comment": "6 mm flat end mill" },
+    "2": { "diameter_mm": 5, "length_mm": 70, "comment": "5 mm jobber drill" },
+    "3": { "diameter_mm": 3, "length_mm": 45, "comment": "3 mm ball end mill" },
+    "4": { "diameter_mm": 1, "length_mm": 40, "comment": "60 degree engraver, 1 mm tip" }
+  }
+}

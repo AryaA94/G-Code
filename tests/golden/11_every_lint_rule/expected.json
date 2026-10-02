@@ -1,0 +1,132 @@
+{
+  "lint": {
+    "diagnostics": [
+      {
+        "code": "LN001",
+        "column": 1,
+        "line": 5,
+        "message": "rapid move ends at Z-4.000 (below Z0); use G1 with a feed rate",
+        "severity": "warning"
+      },
+      {
+        "code": "LN003",
+        "column": 1,
+        "line": 6,
+        "message": "cutting move with no feed rate (F) set",
+        "severity": "error"
+      },
+      {
+        "code": "LN004",
+        "column": 1,
+        "line": 6,
+        "message": "cutting move while the spindle is not running (missing M3/M4?)",
+        "severity": "error"
+      },
+      {
+        "code": "LN008",
+        "column": 1,
+        "line": 6,
+        "message": "cutting move before any tool was loaded (T.. M6)",
+        "severity": "warning"
+      },
+      {
+        "code": "LN002",
+        "column": 1,
+        "line": 8,
+        "message": "X reaches 300.000 mm (machine coords), outside travel [-250.000, 250.000]",
+        "severity": "error"
+      },
+      {
+        "code": "LN009",
+        "column": 1,
+        "line": 12,
+        "message": "cutting move plunges 7.000 mm into the stock, deeper than the loaded tool's diameter (6.000 mm)",
+        "severity": "warning"
+      },
+      {
+        "code": "LN006",
+        "column": 1,
+        "line": 13,
+        "message": "arc radius is 5.200 mm at the start but 4.800 mm at the end (check I/J/K)",
+        "severity": "error"
+      },
+      {
+        "code": "LN007",
+        "column": 1,
+        "line": 14,
+        "message": "feed 9000.000 mm/min is above the machine maximum of 4000.000 mm/min",
+        "severity": "warning"
+      },
+      {
+        "code": "LN005",
+        "column": 1,
+        "line": 15,
+        "message": "tool change with the spindle still on (add M5 before M6)",
+        "severity": "warning"
+      },
+      {
+        "code": "LN004",
+        "column": 1,
+        "line": 17,
+        "message": "cutting move while the spindle is not running (missing M3/M4?)",
+        "severity": "error"
+      }
+    ],
+    "errors": 5,
+    "warnings": 5
+  },
+  "stats": {
+    "all_bounds": {
+      "max": [
+        300.0,
+        15.0,
+        100.0
+      ],
+      "min": [
+        0.0,
+        0.0,
+        -9.0
+      ]
+    },
+    "cut_bounds": {
+      "max": [
+        300.0,
+        15.0,
+        100.0
+      ],
+      "min": [
+        10.0,
+        10.0,
+        -9.0
+      ]
+    },
+    "feed_mm_min": {
+      "max": 9000.0,
+      "min": 200.0
+    },
+    "length_mm": {
+      "cutting": 341.961,
+      "rapid": 611.142
+    },
+    "lines": 18,
+    "max_spindle_rpm": 8000.0,
+    "moves": {
+      "arc": 1,
+      "dwells": 0,
+      "linear": 5,
+      "pauses": 0,
+      "rapid": 7,
+      "tool_changes": 2
+    },
+    "time_s": {
+      "cutting": 38.5667,
+      "other": 10.0,
+      "rapid": 10.6366,
+      "total": 59.2033
+    },
+    "tools": [
+      1,
+      3
+    ]
+  }
+}

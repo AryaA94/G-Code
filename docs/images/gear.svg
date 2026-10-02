@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600" font-family="Helvetica, Arial, sans-serif" font-size="12">
+<rect width="100%" height="100%" fill="#ffffff"/>
+<text x="30" y="20" font-size="15" fill="#222">examples/gear.nc</text>
+<g stroke="#c33" stroke-width="1"><line x1="349.00" y1="312.00" x2="361.00" y2="312.00"/><line x1="355.00" y1="306.00" x2="355.00" y2="318.00"/></g>
+<clipPath id="frame"><rect x="30" y="54" width="650" height="516"/></clipPath>
+<g clip-path="url(#frame)" fill="none" stroke="#9a9a9a" stroke-width="0.8" stroke-dasharray="4 3">
+<polyline points="-601.86,312.00 -601.86,312.00"/>
+<polyline points="-601.86,312.00 554.35,312.00"/>
+<polyline points="554.35,312.00 554.35,312.00"/>
+<polyline points="554.35,312.00 386.90,312.00"/>
+<polyline points="386.90,312.00 386.90,312.00"/>
+<polyline points="386.90,312.00 386.90,312.00"/>
+<polyline points="386.90,312.00 386.90,312.00"/>
+</g>
+<g fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+<polyline stroke="#0d0887" points="554.35,312.00 554.35,312.00"/>
+<polyline stroke="#f5963c" points="554.35,312.00 554.35,312.00"/>
+<polyline stroke="#f5963c" points="554.35,312.00 553.73,296.36 551.89,280.82 548.84,265.46"/>
+<polyline stroke="#f5963c" points="548.84,265.46 586.07,250.08"/>
+<polyline stroke="#f5963c" points="586.07,250.08 581.18,234.12 575.20,218.53 568.14,203.40"/>
+<polyline stroke="#f5963c" points="568.14,203.40 527.64,212.33"/>
+<polyline stroke="#f5963c" points="527.64,212.33 519.29,199.09 509.92,186.55 499.60,174.78"/>
+<polyline stroke="#f5963c" points="499.60,174.78 524.15,142.85"/>
+<polyline stroke="#f5963c" points="524.15,142.85 511.94,131.46 498.96,120.95 485.28,111.38"/>
+<polyline stroke="#f5963c" points="485.28,111.38 454.67,139.36"/>
+<polyline stroke="#f5963c" points="454.67,139.36 440.82,132.07 426.44,125.90 411.61,120.87"/>
+<polyline stroke="#f5963c" points="411.61,120.87 416.92,80.93"/>
+<polyline stroke="#f5963c" points="416.92,80.93 400.65,77.18 384.15,74.57 367.52,73.11"/>
+<polyline stroke="#f5963c" points="367.52,73.11 355.00,112.65"/>
+<polyline stroke="#f5963c" points="355.00,112.65 339.36,113.27 323.82,115.11 308.46,118.16"/>
+<polyline stroke="#f5963c" points="308.46,118.16 293.08,80.93"/>
+<polyline stroke="#f5963c" points="293.08,80.93 277.12,85.82 261.53,91.80 246.40,98.86"/>
+<polyline stroke="#f5963c" points="246.40,98.86 255.33,139.36"/>
+<polyline stroke="#f5963c" points="255.33,139.36 242.09,147.71 229.55,157.08 217.78,167.40"/>
+<polyline stroke="#f5963c" points="217.78,167.40 185.85,142.85"/>
+<polyline stroke="#f5963c" points="185.85,142.85 174.46,155.06 163.95,168.04 154.38,181.72"/>
+<polyline stroke="#f5963c" points="154.38,181.72 182.36,212.33"/>
+<polyline stroke="#f5963c" points="182.36,212.33 175.07,226.18 168.90,240.56 163.87,255.39"/>
+<polyline stroke="#f5963c" points="163.87,255.39 123.93,250.08"/>
+<polyline stroke="#f5963c" points="123.93,250.08 120.18,266.35 117.57,282.85 116.11,299.48"/>
+<polyline stroke="#f5963c" points="116.11,299.48 155.65,312.00"/>
+<polyline stroke="#f5963c" points="155.65,312.00 156.27,327.64 158.11,343.18 161.16,358.54"/>
+<polyline stroke="#f5963c" points="161.16,358.54 123.93,373.92"/>
+<polyline stroke="#f5963c" points="123.93,373.92 128.82,389.88 134.80,405.47 141.86,420.60"/>
+<polyline stroke="#f5963c" points="141.86,420.60 182.36,411.67"/>
+<polyline stroke="#f5963c" points="182.36,411.67 190.71,424.91 200.08,437.45 210.40,449.22"/>
+<polyline stroke="#f5963c" points="210.40,449.22 185.85,481.15"/>
+<polyline stroke="#f5963c" points="185.85,481.15 198.06,492.54 211.04,503.05 224.72,512.62"/>
+<polyline stroke="#f5963c" points="224.72,512.62 255.33,484.64"/>
+<polyline stroke="#f5963c" points="255.33,484.64 269.18,491.93 283.56,498.10 298.39,503.13"/>
+<polyline stroke="#f5963c" points="298.39,503.13 293.08,543.07"/>
+<polyline stroke="#f5963c" points="293.08,543.07 309.35,546.82 325.85,549.43 342.48,550.89"/>
+<polyline stroke="#f5963c" points="342.48,550.89 355.00,511.35"/>
+<polyline stroke="#f5963c" points="355.00,511.35 370.64,510.73 386.18,508.89 401.54,505.84"/>
+<polyline stroke="#f5963c" points="401.54,505.84 416.92,543.07"/>
+<polyline stroke="#f5963c" points="416.92,543.07 432.88,538.18 448.47,532.20 463.60,525.14"/>
+<polyline stroke="#f5963c" points="463.60,525.14 454.67,484.64"/>
+<polyline stroke="#f5963c" points="454.67,484.64 467.91,476.29 480.45,466.92 492.22,456.60"/>
+<polyline stroke="#f5963c" points="492.22,456.60 524.15,481.15"/>
+<polyline stroke="#f5963c" points="524.15,481.15 535.54,468.94 546.05,455.96 555.62,442.28"/>
+<polyline stroke="#f5963c" points="555.62,442.28 527.64,411.67"/>
+<polyline stroke="#f5963c" points="527.64,411.67 534.93,397.82 541.10,383.44 546.13,368.61"/>
+<polyline stroke="#f5963c" points="546.13,368.61 586.07,373.92"/>
+<polyline stroke="#f5963c" points="586.07,373.92 589.82,357.65 592.43,341.15 593.89,324.52"/>
+<polyline stroke="#f5963c" points="593.89,324.52 554.35,312.00"/>
+<polyline stroke="#0d0887" points="386.90,312.00 386.90,312.00"/>
+<polyline stroke="#f5963c" points="386.90,312.00 386.28,305.78 384.47,299.79 381.52,294.28 377.55,289.45 372.72,285.48 367.21,282.53 361.22,280.72 355.00,280.10 348.78,280.72 342.79,282.53 337.28,285.48 332.45,289.45 328.48,294.28 325.53,299.79 323.72,305.78 323.10,312.00 323.72,318.22 325.53,324.21 328.48,329.72 332.45,334.55 337.28,338.52 342.79,341.47 348.78,343.28 355.00,343.90 361.22,343.28 367.21,341.47 372.72,338.52 377.55,334.55 381.52,329.72 384.47,324.21 386.28,318.22 386.90,312.00"/>
+</g>
+<g stroke="#333" stroke-width="1.2"><line x1="30" y1="588" x2="109.74" y2="588"/></g><text x="115.74" y="592" fill="#333">10 mm</text>
+<defs><linearGradient id="ramp" x1="0" y1="1" x2="0" y2="0"><stop offset="0%" stop-color="#0d0887"/><stop offset="25%" stop-color="#6a00a8"/><stop offset="50%" stop-color="#b12a90"/><stop offset="75%" stop-color="#e16462"/><stop offset="100%" stop-color="#f5963c"/></linearGradient></defs>
+<text x="720" y="64" fill="#333">feed mm/min</text>
+<rect x="720" y="72" width="14" height="200" fill="url(#ramp)" stroke="#666" stroke-width="0.5"/>
+<text x="740" y="82" fill="#333">800</text>
+<text x="740" y="272" fill="#333">200</text>
+<line x1="720" y1="296" x2="744" y2="296" stroke="#9a9a9a" stroke-dasharray="4 3"/><text x="750" y="300" fill="#333">rapid</text>
+</svg>

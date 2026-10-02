@@ -1,0 +1,192 @@
+{
+  "lint": {
+    "diagnostics": [
+      {
+        "code": "GC001",
+        "column": 8,
+        "line": 3,
+        "message": "comment is never closed (missing ')')",
+        "severity": "error"
+      },
+      {
+        "code": "GC002",
+        "column": 4,
+        "line": 4,
+        "message": "'X' has no number after it",
+        "severity": "error"
+      },
+      {
+        "code": "LN004",
+        "column": 1,
+        "line": 4,
+        "message": "cutting move while the spindle is not running (missing M3/M4?)",
+        "severity": "error"
+      },
+      {
+        "code": "LN008",
+        "column": 1,
+        "line": 4,
+        "message": "cutting move before any tool was loaded (T.. M6)",
+        "severity": "warning"
+      },
+      {
+        "code": "GC002",
+        "column": 4,
+        "line": 5,
+        "message": "'X' has no number after it",
+        "severity": "error"
+      },
+      {
+        "code": "GC004",
+        "column": 5,
+        "line": 5,
+        "message": "parameters and expressions ('#', '[') are not supported",
+        "severity": "error"
+      },
+      {
+        "code": "GC006",
+        "column": 7,
+        "line": 6,
+        "message": "'X' appears more than once on this line",
+        "severity": "error"
+      },
+      {
+        "code": "GC008",
+        "column": 4,
+        "line": 7,
+        "message": "G1 conflicts with another G-code from the same group on this line",
+        "severity": "error"
+      },
+      {
+        "code": "GC009",
+        "column": 1,
+        "line": 8,
+        "message": "unknown G-code G12",
+        "severity": "error"
+      },
+      {
+        "code": "GC010",
+        "column": 1,
+        "line": 9,
+        "message": "G41 is not supported by this simulator",
+        "severity": "error"
+      },
+      {
+        "code": "GC023",
+        "column": 5,
+        "line": 9,
+        "message": "'D' is not used by this simulator and was ignored",
+        "severity": "warning"
+      },
+      {
+        "code": "GC011",
+        "column": 1,
+        "line": 10,
+        "message": "M98 is not simulated and was ignored",
+        "severity": "warning"
+      },
+      {
+        "code": "GC012",
+        "column": 4,
+        "line": 11,
+        "message": "axis A is not supported (3-axis X/Y/Z only)",
+        "severity": "error"
+      },
+      {
+        "code": "GC023",
+        "column": 7,
+        "line": 12,
+        "message": "'E' is not used by this simulator and was ignored",
+        "severity": "warning"
+      },
+      {
+        "code": "GC013",
+        "column": 0,
+        "line": 14,
+        "message": "axis words given but no motion mode is active (after G80)",
+        "severity": "error"
+      },
+      {
+        "code": "GC014",
+        "column": 0,
+        "line": 15,
+        "message": "arc needs a center (I/J) or a radius (R)",
+        "severity": "error"
+      },
+      {
+        "code": "GC017",
+        "column": 0,
+        "line": 16,
+        "message": "G4 dwell needs a time in seconds (P)",
+        "severity": "error"
+      },
+      {
+        "code": "GC021",
+        "column": 0,
+        "line": 17,
+        "message": "M6 tool change with no tool selected (T)",
+        "severity": "warning"
+      },
+      {
+        "code": "GC024",
+        "column": 0,
+        "line": 19,
+        "message": "lines after the program end (M2/M30) are ignored",
+        "severity": "info"
+      }
+    ],
+    "errors": 13,
+    "warnings": 5
+  },
+  "stats": {
+    "all_bounds": {
+      "max": [
+        10.0,
+        5.0,
+        0.0
+      ],
+      "min": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "cut_bounds": {
+      "max": [
+        10.0,
+        5.0,
+        0.0
+      ],
+      "min": [
+        1.0,
+        0.0,
+        0.0
+      ]
+    },
+    "feed_mm_min": {
+      "max": 100.0,
+      "min": 100.0
+    },
+    "length_mm": {
+      "cutting": 15.0,
+      "rapid": 13.0
+    },
+    "lines": 19,
+    "max_spindle_rpm": 0.0,
+    "moves": {
+      "arc": 0,
+      "dwells": 0,
+      "linear": 3,
+      "pauses": 0,
+      "rapid": 3,
+      "tool_changes": 0
+    },
+    "time_s": {
+      "cutting": 9.00333,
+      "other": 0.0,
+      "rapid": 0.431206,
+      "total": 9.43454
+    },
+    "tools": []
+  }
+}

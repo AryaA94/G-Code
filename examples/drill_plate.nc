@@ -1,0 +1,26 @@
+(DRILL PLATE - 3 x 4 grid of 5 mm holes, 20 mm deep, peck drilled in 4 mm steps)
+G21 G17 G90 G94
+G54
+T2 M6
+G43 H2
+S2200 M3
+G0 Z15
+G0 X10 Y10
+G98 G83 X10 Y10 Z-20 R2 Q4 F120
+X30
+X50
+X70
+Y30
+X50
+X30
+X10
+Y50
+X30
+X50
+X70
+G80
+G0 Z15
+M5
+G28 G91 Z0
+G90
+M30

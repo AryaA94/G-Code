@@ -1,0 +1,13 @@
+(helical bore: 3 turns of 1 mm pitch then a flat circle)
+G21 G90 G17
+T1 M6
+S9000 M3
+G0 X15 Y10 Z2
+G1 Z0 F200
+G3 X15 Y10 Z-1 I-5 J0 F800
+G3 X15 Y10 Z-2 I-5 J0
+G3 X15 Y10 Z-3 I-5 J0
+G3 X15 Y10 I-5 J0
+G1 X10
+G0 Z5
+M30

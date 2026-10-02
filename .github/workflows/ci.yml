@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-24.04, cxx: g++-13 }
+          - { os: ubuntu-24.04, cxx: clang++-18 }
+          - { os: macos-14,     cxx: clang++ }
+          - { os: windows-2022, cxx: cl }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        shell: bash
+        run: |
+          if [[ "${{ matrix.cxx }}" == "cl" ]]; then
+            cmake -S . -B build -DGCODESIM_BUILD_BENCH=OFF
+          else
+            cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=${{ matrix.cxx }}
+          fi
+      - name: Build
+        run: cmake --build build --config Release -j 4
+      - name: Test
+        run: ctest --test-dir build -C Release --output-on-failure
+
+  sanitizers:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: cmake --preset asan
+      - run: cmake --build build/asan -j 4
+      - run: ctest --test-dir build/asan --output-on-failure
+
+  coverage:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install gcovr
+      - run: cmake --preset coverage -DGCODESIM_BUILD_BENCH=OFF
+      - run: cmake --build build/coverage -j 4
+      - run: ctest --test-dir build/coverage
+      - name: Line coverage of the library
+        run: gcovr -r . --filter src/ --print-summary build/coverage

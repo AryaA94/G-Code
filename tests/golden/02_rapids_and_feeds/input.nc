@@ -1,0 +1,18 @@
+(square with rapids between two depths)
+G21 G90 G17
+T1 M6
+S8000 M3
+G0 Z5
+G0 X0 Y0
+G1 Z-1 F200
+G1 X20 F800
+G1 Y20
+G1 X0
+G1 Y0
+G0 Z5
+G0 X40
+G1 Z-1 F200
+G1 X60 F800
+G0 Z5
+M5
+M30

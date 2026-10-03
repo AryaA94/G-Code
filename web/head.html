@@ -203,6 +203,13 @@ footer a{ color:var(--muted); }
   .viewer .help{ display:none; }
   .clock{ min-width:0; font-size:11px; }
 }
+.machine-note{ margin:8px 0 0; font-size:12px; line-height:1.45; color:var(--muted, #8a93a0); }
+.foot-btns{ display:flex; gap:8px; align-items:center; }
+.chip.own{ border-style:dashed; }
+.toast{ position:fixed; left:50%; bottom:24px; transform:translateX(-50%); background:#1d232b; color:#e7eaee;
+  border:1px solid rgba(255,255,255,.12); border-radius:8px; padding:8px 14px; font-size:13px; opacity:0;
+  transition:opacity .2s; pointer-events:none; z-index:50; }
+.toast.show{ opacity:1; }
 </style>
 </head>
 <body>
@@ -224,7 +231,7 @@ footer a{ color:var(--muted); }
       browser: it's the same code as the command-line tool, compiled to WebAssembly.</p>
   </section>
 
-  <p class="section-label">Examples</p>
+  <p class="section-label">Examples, or try your own</p>
   <div class="presets" id="presets"></div>
 
   <div class="workspace">
@@ -240,7 +247,11 @@ footer a{ color:var(--muted); }
         </div>
         <div class="editor-foot">
           <span class="hint">Re-checks as you type. <kbd>Ctrl</kbd>+<kbd>Enter</kbd> runs now.</span>
-          <button class="btn small" id="runBtn">Run</button>
+          <span class="foot-btns">
+            <button class="btn secondary small" id="openBtn" title="Load a .nc, .gcode, .tap or .txt file">Open file</button>
+            <input type="file" id="fileInput" accept=".nc,.gcode,.ngc,.tap,.cnc,.txt,text/plain" hidden>
+            <button class="btn small" id="runBtn">Run</button>
+          </span>
         </div>
         <div class="error-banner" id="errorBanner"></div>
       </section>
@@ -249,10 +260,8 @@ footer a{ color:var(--muted); }
         <div class="panel-head"><h2>Machine</h2></div>
         <div class="field">
           <label for="machineSelect">Limits used for timing and checks</label>
-          <select id="machineSelect">
-            <option value="example">Example 3-axis VMC (examples/machine.json)</option>
-            <option value="default">No config: generic defaults, no travel limits or tools</option>
-          </select>
+          <select id="machineSelect"></select>
+          <p class="machine-note" id="machineNote"></p>
         </div>
         <details>
           <summary>Edit machine.json</summary>
@@ -295,10 +304,10 @@ footer a{ color:var(--muted); }
           <button class="play" id="playBtn" aria-label="play"></button>
           <input type="range" id="scrub" min="0" max="1000" value="1000" step="1" aria-label="time">
           <select id="speed" aria-label="playback speed">
-            <option value="1">1×</option>
-            <option value="5">5×</option>
-            <option value="20" selected>20×</option>
-            <option value="100">100×</option>
+            <option value="fit:60">Slow (~1 min)</option>
+            <option value="fit:25" selected>Normal (~25 s)</option>
+            <option value="fit:10">Fast (~10 s)</option>
+            <option value="real">Real time</option>
           </select>
           <span class="clock" id="clock">0.0 / 0.0 s</span>
         </div>
@@ -334,9 +343,5 @@ footer a{ color:var(--muted); }
   </div>
 </main>
 
-<footer><div class="wrap">
-  gcode-sim · C++20, compiled to WebAssembly with Emscripten ·
-  <a href="https://github.com/AryaA94/G-Code">github.com/AryaA94/G-Code</a>
-</div></footer>
 
 <script>

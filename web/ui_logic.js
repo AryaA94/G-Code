@@ -16,6 +16,24 @@ const PRESETS = [
   { key: 'drill_plate', tag: 'PECK DRILL',     title: '12 holes with G83 pecking' },
   { key: 'lint_demo',   tag: 'LINT',           title: 'A program full of mistakes' },
 ];
+const OWN = { key: 'own', tag: 'YOUR OWN', title: 'Write, paste or open your own program' };
+const OWN_STARTER = `(Your program. Paste G-code here, or use Open file below.)
+(Units mm. Tools T1-T4 are set up in the machine config.)
+G21 G17 G90 G94
+G54
+T1 M6
+S8000 M3
+G0 X0 Y0 Z5
+G1 Z-1 F300
+G1 X40 F800
+G1 Y30
+G1 X0
+G1 Y0
+G0 Z5
+M5
+M30
+`;
+const DRAFT_KEY = 'gcode-sim.own-program';
 
 // Colour scale for dark backgrounds (blue -> violet -> pink -> orange -> yellow).
 const RAMP = [[91, 124, 250], [154, 92, 240], [224, 86, 155], [255, 138, 61], [255, 209, 102]];
@@ -27,7 +45,9 @@ let result = null;     // last successful analysis
 let scene = null;      // result, prepared for drawing
 let highlightLine = 0; // set by clicking a diagnostic
 const cam = { yaw: -0.55, pitch: 1.0, zoom: 1, panX: 0, panY: 0, fit: 1, view: 'iso' };
-const play = { t: 0, playing: false, last: 0, speed: 20 };
+const play = { t: 0, playing: false, last: 0, mode: 'fit:25' };
+let presetKey = 'bracket';
+let saver = null;      // the viewer's download helper when the page runs inside Claude
 
 // ---- engine -----------------------------------------------------------------
 
@@ -41,8 +61,26 @@ GcodeSimModule().then(mod => {
   loadPreset('bracket');
 });
 
+// Machines to pick from: real ones from examples/machines, the generic
+// benchtop example, and "no config".
+function machineList() {
+  const list = (typeof GS_MACHINES !== 'undefined' ? GS_MACHINES : []).map(m => ({ ...m }));
+  list.push({ key: 'example', name: 'Benchtop mill (generic example)', json: GS_MACHINE });
+  return list;
+}
+
 function machineConfig() {
-  return $('machineSelect').value === 'example' ? $('machineJson').value : '';
+  return $('machineSelect').value ? $('machineJson').value : '';
+}
+
+function selectMachine(key) {
+  const m = machineList().find(x => x.key === key);
+  $('machineSelect').value = m ? key : '';
+  $('machineJson').value = m ? m.json : '';
+  $('machineJson').disabled = !m;
+  let note = 'Generic defaults: no travel limits and no tool table, so the tool and travel checks are off.';
+  if (m) { try { note = JSON.parse(m.json).comment || ''; } catch (e) { note = ''; } }
+  $('machineNote').textContent = note;
 }
 
 function run({ refit = false } = {}) {
@@ -80,7 +118,14 @@ function showError(msg) {
 // ---- presets and editor -----------------------------------------------------
 
 function loadPreset(key) {
-  $('code').value = GS_EXAMPLES[key] || '';
+  presetKey = key;
+  if (key === 'own') {
+    let draft = null;
+    try { draft = localStorage.getItem(DRAFT_KEY); } catch (e) { /* storage blocked */ }
+    $('code').value = draft || OWN_STARTER;
+  } else {
+    $('code').value = GS_EXAMPLES[key] || '';
+  }
   $('code').scrollTop = 0;
   document.querySelectorAll('.chip').forEach(c => c.classList.toggle('active', c.dataset.key === key));
   highlightLine = 0;
@@ -92,9 +137,9 @@ function loadPreset(key) {
 
 function buildPresets() {
   const box = $('presets');
-  for (const p of PRESETS) {
+  for (const p of [...PRESETS, OWN]) {
     const b = document.createElement('button');
-    b.className = 'chip';
+    b.className = p === OWN ? 'chip own' : 'chip';
     b.dataset.key = p.key;
     b.dataset.tag = p.tag;
     b.textContent = p.title;
@@ -491,11 +536,24 @@ function togglePlay() {
   updateTime();
 }
 
+// Simulated seconds per real second. "fit:N" plays the moving part of the
+// program in about N seconds; tool changes, dwells and pauses are skipped
+// through in under half a second so they never look like a stall.
+function playRate() {
+  if (play.mode === 'real') return 1;
+  const target = +play.mode.split(':')[1] || 25;
+  const motion = scene.moves.reduce((s, m) => s + (m.motion ? m.dt : 0), 0);
+  const rate = Math.max(motion, 1e-3) / target;
+  const m = currentMove();
+  if (m && !m.motion && m.dt > 0) return Math.max(rate, m.dt / 0.4);
+  return rate;
+}
+
 function tick(now) {
   if (!play.playing) return;
   const dt = Math.min(0.1, (now - play.last) / 1000);
   play.last = now;
-  play.t += dt * play.speed;
+  play.t += dt * playRate();
   if (play.t >= scene.total) { play.t = scene.total; play.playing = false; }
   updateTime();
   if (play.playing) requestAnimationFrame(tick);
@@ -659,7 +717,24 @@ function niceStep(v) {
   return 10 * p;
 }
 
-function download(name, text, type) {
+function toast(msg) {
+  let t = document.querySelector('.toast');
+  if (!t) { t = document.createElement('div'); t.className = 'toast'; document.body.appendChild(t); }
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => t.classList.remove('show'), 2600);
+}
+
+async function download(name, text, type) {
+  if (saver) {
+    try {
+      await saver.save({ filename: name, data: new Blob([text], { type }) });
+    } catch (e) {
+      if (e && e.code !== 'declined') toast('Could not save ' + name + (e.message ? ': ' + e.message : ''));
+    }
+    return;
+  }
   const url = URL.createObjectURL(new Blob([text], { type }));
   const a = document.createElement('a');
   a.href = url;
@@ -674,11 +749,38 @@ function download(name, text, type) {
 
 function wire() {
   buildPresets();
-  $('machineJson').value = GS_MACHINE;
+  const sel = $('machineSelect');
+  for (const m of machineList()) sel.add(new Option(m.name, m.key));
+  sel.add(new Option('No config: generic defaults', ''));
+  selectMachine(machineList()[0].key);
   renderPlayIcon();
+  // Inside Claude, downloads go through the viewer's save dialog.
+  if (window.claude && window.claude.use) {
+    window.claude.use('downloads').then(d => { saver = d; }).catch(() => {});
+  }
 
   const code = $('code');
-  code.addEventListener('input', () => { highlightLine = 0; scheduleRun(); });
+  code.addEventListener('input', () => {
+    highlightLine = 0;
+    // editing turns whatever is loaded into "your own" program and keeps it
+    if (presetKey !== 'own') {
+      presetKey = 'own';
+      document.querySelectorAll('.chip').forEach(c => c.classList.toggle('active', c.dataset.key === 'own'));
+    }
+    try { localStorage.setItem(DRAFT_KEY, code.value); } catch (e) { /* storage blocked */ }
+    scheduleRun();
+  });
+  $('openBtn').addEventListener('click', () => $('fileInput').click());
+  $('fileInput').addEventListener('change', async () => {
+    const f = $('fileInput').files[0];
+    $('fileInput').value = '';
+    if (!f) return;
+    if (f.size > 5e6) { showError('That file is over 5 MB; this page is meant for programs up to a few MB.'); return; }
+    const text = await f.text();
+    try { localStorage.setItem(DRAFT_KEY, text); } catch (e) { /* storage blocked */ }
+    loadPreset('own');
+    toast('Loaded ' + f.name);
+  });
   code.addEventListener('scroll', () => { $('gutter').scrollTop = code.scrollTop; });
   code.addEventListener('keydown', e => {
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); clearTimeout(runTimer); run(); }
@@ -690,7 +792,7 @@ function wire() {
     }
   });
   $('runBtn').addEventListener('click', () => { clearTimeout(runTimer); run(); });
-  $('machineSelect').addEventListener('change', () => { $('machineJson').disabled = $('machineSelect').value !== 'example'; run(); });
+  $('machineSelect').addEventListener('change', () => { selectMachine($('machineSelect').value); run(); });
   $('machineJson').addEventListener('input', scheduleRun);
 
   document.querySelectorAll('#viewSeg button').forEach(b => b.addEventListener('click', () => setView(b.dataset.view)));
@@ -703,7 +805,7 @@ function wire() {
     play.t = $('scrub').value / 1000 * scene.total;
     updateTime();
   });
-  $('speed').addEventListener('change', () => { play.speed = +$('speed').value; });
+  $('speed').addEventListener('change', () => { play.mode = $('speed').value; play.last = performance.now(); });
 
   $('svgBtn').addEventListener('click', () => {
     if (!engine) return;

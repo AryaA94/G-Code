@@ -1,0 +1,65 @@
+{
+  "name": "DMG MORI DMU 50 (5-axis, run as 3-axis)",
+  "comment": "High-end universal machining center. Linear axes only; published specs, acceleration is an estimate.",
+  "max_rate_mm_min": {
+    "x": 30000,
+    "y": 30000,
+    "z": 30000
+  },
+  "accel_mm_s2": {
+    "x": 6000,
+    "y": 6000,
+    "z": 6000
+  },
+  "max_feed_mm_min": 30000,
+  "junction_deviation_mm": 0.01,
+  "tool_change_time_s": 6.0,
+  "travel_mm": {
+    "x": [
+      -325.0,
+      325.0
+    ],
+    "y": [
+      -260.0,
+      260.0
+    ],
+    "z": [
+      -475,
+      0
+    ]
+  },
+  "work_offsets": {
+    "G54": {
+      "x": 0,
+      "y": 0,
+      "z": -285
+    },
+    "G55": {
+      "x": 120,
+      "y": 0,
+      "z": -285
+    }
+  },
+  "tools": {
+    "1": {
+      "diameter_mm": 6,
+      "length_mm": 50,
+      "comment": "6 mm flat end mill"
+    },
+    "2": {
+      "diameter_mm": 5,
+      "length_mm": 70,
+      "comment": "5 mm jobber drill"
+    },
+    "3": {
+      "diameter_mm": 3,
+      "length_mm": 45,
+      "comment": "3 mm ball end mill"
+    },
+    "4": {
+      "diameter_mm": 1,
+      "length_mm": 40,
+      "comment": "60 degree engraver, 1 mm tip"
+    }
+  }
+}

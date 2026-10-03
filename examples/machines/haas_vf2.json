@@ -1,0 +1,65 @@
+{
+  "name": "Haas VF-2 (vertical machining center)",
+  "comment": "Common job-shop VMC. Travels, rapids, max feed and tool change from Haas's published specs; acceleration is an estimate.",
+  "max_rate_mm_min": {
+    "x": 25400,
+    "y": 25400,
+    "z": 25400
+  },
+  "accel_mm_s2": {
+    "x": 4000,
+    "y": 4000,
+    "z": 3000
+  },
+  "max_feed_mm_min": 16500,
+  "junction_deviation_mm": 0.01,
+  "tool_change_time_s": 2.8,
+  "travel_mm": {
+    "x": [
+      -381.0,
+      381.0
+    ],
+    "y": [
+      -203.0,
+      203.0
+    ],
+    "z": [
+      -508,
+      0
+    ]
+  },
+  "work_offsets": {
+    "G54": {
+      "x": 0,
+      "y": 0,
+      "z": -305
+    },
+    "G55": {
+      "x": 120,
+      "y": 0,
+      "z": -305
+    }
+  },
+  "tools": {
+    "1": {
+      "diameter_mm": 6,
+      "length_mm": 50,
+      "comment": "6 mm flat end mill"
+    },
+    "2": {
+      "diameter_mm": 5,
+      "length_mm": 70,
+      "comment": "5 mm jobber drill"
+    },
+    "3": {
+      "diameter_mm": 3,
+      "length_mm": 45,
+      "comment": "3 mm ball end mill"
+    },
+    "4": {
+      "diameter_mm": 1,
+      "length_mm": 40,
+      "comment": "60 degree engraver, 1 mm tip"
+    }
+  }
+}

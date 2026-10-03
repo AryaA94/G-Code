@@ -1,0 +1,65 @@
+{
+  "name": "Tormach 1100MX (personal CNC mill)",
+  "comment": "Prosumer mill with an automatic tool changer. Published specs; acceleration is an estimate.",
+  "max_rate_mm_min": {
+    "x": 7620,
+    "y": 7620,
+    "z": 7620
+  },
+  "accel_mm_s2": {
+    "x": 1500,
+    "y": 1500,
+    "z": 1200
+  },
+  "max_feed_mm_min": 7620,
+  "junction_deviation_mm": 0.01,
+  "tool_change_time_s": 8.0,
+  "travel_mm": {
+    "x": [
+      -228.5,
+      228.5
+    ],
+    "y": [
+      -139.5,
+      139.5
+    ],
+    "z": [
+      -413,
+      0
+    ]
+  },
+  "work_offsets": {
+    "G54": {
+      "x": 0,
+      "y": 0,
+      "z": -248
+    },
+    "G55": {
+      "x": 120,
+      "y": 0,
+      "z": -248
+    }
+  },
+  "tools": {
+    "1": {
+      "diameter_mm": 6,
+      "length_mm": 50,
+      "comment": "6 mm flat end mill"
+    },
+    "2": {
+      "diameter_mm": 5,
+      "length_mm": 70,
+      "comment": "5 mm jobber drill"
+    },
+    "3": {
+      "diameter_mm": 3,
+      "length_mm": 45,
+      "comment": "3 mm ball end mill"
+    },
+    "4": {
+      "diameter_mm": 1,
+      "length_mm": 40,
+      "comment": "60 degree engraver, 1 mm tip"
+    }
+  }
+}

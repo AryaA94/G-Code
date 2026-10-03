@@ -50,6 +50,11 @@ await page.goto('file://' + page_path);
 await page.waitForFunction(() => document.querySelectorAll('#rules dt').length > 0, null, { timeout: 20000 });
 check((await page.locator('#rules dt').count()) === 9, 'page lists nine lint rules');
 
+// real machines are offered; the CLI comparison below uses examples/machine.json
+const machines = await page.evaluate(() => [...document.querySelectorAll('#machineSelect option')].map(o => o.value));
+check(machines[0] === 'haas_vf2' && machines.includes('example') && machines.includes(''), `machine list: ${machines.join(', ')}`);
+await page.selectOption('#machineSelect', 'example');
+
 for (const name of examples) {
   await page.click(`[data-key=${name}]`);
   const r = await page.evaluate(() => result);
@@ -78,6 +83,23 @@ await page.click('[data-key=bracket]');
 await page.fill('#code', 'G21 G90\nT1 M6\nS1000 M3\nG1 X10 F600\nM30\n');
 await page.waitForFunction(() => result && result.stats.moves.linear === 1 && result.stats.moves.arc === 0);
 check(true, 'typing a new program re-runs the analysis');
+check(await page.evaluate(() => presetKey === 'own' && document.querySelector('.chip.active').dataset.key === 'own'),
+  'editing a program switches to "your own"');
+
+// "your own" brings the edited program back after looking at an example
+await page.click('[data-key=pocket]');
+await page.click('[data-key=own]');
+check((await page.inputValue('#code')).includes('G1 X10 F600'), '"your own" restores the program you typed');
+
+// playback: a tool change is skipped through instead of stalling the animation
+await page.click('[data-key=bracket]');
+const rates = await page.evaluate(() => {
+  play.mode = 'fit:25';
+  const tc = scene.moves.find(m => m.type === 'tool_change' && m.dt > 0);
+  play.t = tc.t0 + tc.dt / 2;
+  return { atToolChange: tc.dt / playRate() };
+});
+check(rates.atToolChange <= 0.41, `a tool change plays in ${rates.atToolChange.toFixed(2)} s`);
 
 // a broken machine config shows an error instead of crashing
 await page.evaluate(() => { document.querySelector('details').open = true; });
@@ -91,7 +113,7 @@ await page.evaluate(() => { play.t = 0; updateTime(); });
 await page.click('#playBtn');
 await page.waitForTimeout(500);
 const t = await page.evaluate(() => play.t);
-check(t > 0.5, `playback advances (t = ${t.toFixed(2)} s after 0.5 s at 20x)`);
+check(t > 0.5, `playback advances (t = ${t.toFixed(2)} s after 0.5 s of playback)`);
 
 check(errors.length === 0, `no page errors${errors.length ? ': ' + errors.join('; ') : ''}`);
 await browser.close();

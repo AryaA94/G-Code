@@ -5,7 +5,7 @@
 # into one self-contained file: dist/gcode-sim-web.html
 #
 #   head.html          page structure and CSS (ends with an open <script>)
-#   (generated)        the example programs and machine.json from ../examples
+#   (generated)        the example programs and machine configs from ../examples
 #   (generated)        the compiled engine, WASM embedded as base64
 #   ui_logic.js        everything the page does
 #
@@ -64,6 +64,11 @@ ex = Path(sys.argv[1]) / "examples"
 programs = {p.stem: p.read_text() for p in sorted(ex.glob("*.nc"))}
 print("const GS_EXAMPLES = " + json.dumps(programs) + ";")
 print("const GS_MACHINE = " + json.dumps((ex / "machine.json").read_text()) + ";")
+machines = [{"key": p.stem, "name": json.loads(p.read_text())["name"], "json": p.read_text()}
+            for p in sorted((ex / "machines").glob("*.json"))]
+order = ["haas_vf2", "haas_mini_mill", "dmg_dmu50", "tormach_1100mx"]
+machines.sort(key=lambda m: order.index(m["key"]) if m["key"] in order else len(order))
+print("const GS_MACHINES = " + json.dumps(machines) + ";")
 PYEOF
 
 echo "== Assembling the page =="

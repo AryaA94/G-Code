@@ -34,6 +34,13 @@ M5
 M30
 `;
 const DRAFT_KEY = 'gcode-sim.own-program';
+const REPO = 'https://github.com/AryaA94/G-Code';
+
+// Visitor counts with GoatCounter (no cookies, no personal data). Only on the
+// public site: set GOATCOUNTER to your own counter's URL after signing up at
+// goatcounter.com, or leave it empty to turn counting off.
+const GOATCOUNTER = 'https://aryaa94.goatcounter.com/count';
+const COUNTING = !!GOATCOUNTER && /\.github\.io$/.test(location.hostname);
 
 // Colour scale for dark backgrounds (blue -> violet -> pink -> orange -> yellow).
 const RAMP = [[91, 124, 250], [154, 92, 240], [224, 86, 155], [255, 138, 61], [255, 209, 102]];
@@ -115,6 +122,54 @@ function showError(msg) {
   b.classList.toggle('show', !!msg);
 }
 
+// ---- feedback and usage counts ---------------------------------------------
+
+// A pre-filled GitHub issue: what happened, plus the program and machine so
+// the report can be reproduced. URLs have a length limit, so long programs
+// are cut and the reporter is asked to attach the file instead.
+function feedbackUrl() {
+  const code = $('code').value;
+  const limit = 5000;
+  const program = code.length > limit
+    ? code.slice(0, limit) + '\n(... cut here: please attach the full file to this issue)'
+    : code;
+  const sel = $('machineSelect');
+  const machine = sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text : 'none';
+  const lint = result ? result.lint : null;
+  const body =
+`**What happened, or what should be different?**
+
+
+**Where did the program come from?** (Fusion 360, Mastercam, hand written, ...)
+
+
+---
+Machine: ${machine}
+Diagnostics shown: ${lint ? `${lint.errors} errors, ${lint.warnings} warnings` : 'none'}
+
+<details><summary>Program</summary>
+
+\`\`\`gcode
+${program}
+\`\`\`
+</details>`;
+  return `${REPO}/issues/new?` + new URLSearchParams({ title: 'Feedback: ', body, labels: 'feedback' });
+}
+
+function track(name) {
+  if (!COUNTING) return;
+  try { if (window.goatcounter && window.goatcounter.count) window.goatcounter.count({ path: name, event: true }); } catch (e) { /* ignore */ }
+}
+
+function startCounting() {
+  if (!COUNTING) return;
+  const s = document.createElement('script');
+  s.async = true;
+  s.src = 'https://gc.zgo.at/count.js';
+  s.dataset.goatcounter = GOATCOUNTER;
+  document.head.appendChild(s);
+}
+
 // ---- presets and editor -----------------------------------------------------
 
 function loadPreset(key) {
@@ -143,7 +198,7 @@ function buildPresets() {
     b.dataset.key = p.key;
     b.dataset.tag = p.tag;
     b.textContent = p.title;
-    b.addEventListener('click', () => loadPreset(p.key));
+    b.addEventListener('click', () => { loadPreset(p.key); track('example-' + p.key); });
     box.appendChild(b);
   }
 }
@@ -780,6 +835,7 @@ function wire() {
     try { localStorage.setItem(DRAFT_KEY, text); } catch (e) { /* storage blocked */ }
     loadPreset('own');
     toast('Loaded ' + f.name);
+    track('open-file');
   });
   code.addEventListener('scroll', () => { $('gutter').scrollTop = code.scrollTop; });
   code.addEventListener('keydown', e => {
@@ -791,8 +847,17 @@ function wire() {
       scheduleRun();
     }
   });
+  // Fill the issue link at click time so it carries the current program.
+  for (const id of ['feedbackBtn', 'reportLink']) {
+    $(id).addEventListener('click', e => {
+      e.preventDefault();
+      track('feedback');
+      window.open(feedbackUrl(), '_blank', 'noopener');
+    });
+  }
+  startCounting();
   $('runBtn').addEventListener('click', () => { clearTimeout(runTimer); run(); });
-  $('machineSelect').addEventListener('change', () => { selectMachine($('machineSelect').value); run(); });
+  $('machineSelect').addEventListener('change', () => { selectMachine($('machineSelect').value); run(); track('machine-' + ($('machineSelect').value || 'none')); });
   $('machineJson').addEventListener('input', scheduleRun);
 
   document.querySelectorAll('#viewSeg button').forEach(b => b.addEventListener('click', () => setView(b.dataset.view)));

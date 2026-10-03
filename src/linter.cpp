@@ -179,8 +179,9 @@ class NoToolLoaded : public Rule {
  public:
   std::string code() const override { return "LN008"; }
   std::string summary() const override { return "cutting move before any tool was loaded (T.. M6)"; }
-  void check(const std::vector<Segment>& segs, const MachineConfig&,
+  void check(const std::vector<Segment>& segs, const MachineConfig& m,
              std::vector<Diagnostic>& out) const override {
+    if (!m.tool_changer) return;  // bits are changed by hand; no M6 expected
     for (const auto& s : segs) {
       if (s.is_cutting() && s.tool == 0) {
         out.push_back(make(Severity::Warning, code(), s, "cutting move before any tool was loaded (T.. M6)"));

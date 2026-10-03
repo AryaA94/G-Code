@@ -155,6 +155,19 @@ state, diagnostics, the move list) runs at about 2.4M lines/s, the same speed
 as the bare-bones tokenizer in [bench/bench_parse.cpp](bench/bench_parse.cpp)
 that does none of that. Run `build/bench_parse` for your machine's numbers.
 
+## Machines and real CAM output
+
+`examples/machines/` has configs for a Haas VF-2, Haas Mini Mill, DMG MORI
+DMU 50, Tormach 1100MX and a GRBL hobby router (figures approximate, from
+published specs). A machine without a tool changer sets
+`"tool_changer": false`, so programs that never call M6 aren't flagged.
+
+`examples/real/` holds programs in the style Fusion 360 posts for a Haas
+(metric and inch) and for GRBL, plus a plain hobby-sender file. They're
+golden tests, so these formats keep working. If the web page reads one of
+your programs wrong, the **Send feedback** button opens an issue with the
+program and machine filled in.
+
 ## Limitations
 
 - No cutter radius compensation (G41/G42), subprograms, parameters or rotary

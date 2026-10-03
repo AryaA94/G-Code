@@ -203,6 +203,9 @@ footer a{ color:var(--muted); }
   .viewer .help{ display:none; }
   .clock{ min-width:0; font-size:11px; }
 }
+.nav-links{ display:flex; gap:8px; }
+.hero-note{ margin-top:10px !important; font-size:13.5px !important; }
+.hero-note a{ color:var(--accent, #ff9d2e); }
 .machine-note{ margin:8px 0 0; font-size:12px; line-height:1.45; color:var(--muted, #8a93a0); }
 .foot-btns{ display:flex; gap:8px; align-items:center; }
 .chip.own{ border-style:dashed; }
@@ -220,7 +223,10 @@ footer a{ color:var(--muted); }
     </svg>
     gcode-sim
   </a>
-  <a class="nav-link" href="https://github.com/AryaA94/G-Code">Source on GitHub</a>
+  <span class="nav-links">
+    <a class="nav-link" id="feedbackBtn" href="https://github.com/AryaA94/G-Code/issues/new" target="_blank" rel="noopener">Send feedback</a>
+    <a class="nav-link" href="https://github.com/AryaA94/G-Code" target="_blank" rel="noopener">Source on GitHub</a>
+  </span>
 </div></nav>
 
 <main class="wrap">
@@ -228,7 +234,9 @@ footer a{ color:var(--muted); }
     <h1>G-code, <em>simulated</em>.</h1>
     <p>Paste a CNC milling program or pick an example. A C++ engine checks it for mistakes, works out the cycle time
       from the machine's acceleration and corner speeds, and plays the toolpath back in 3D. Everything runs in your
-      browser: it's the same code as the command-line tool, compiled to WebAssembly.</p>
+      browser: it's the same code as the command-line tool, compiled to WebAssembly.
+      Works with metric or inch (G20) programs from Fusion 360 and similar CAM, and GRBL routers.</p>
+    <p class="hero-note">Got a program it reads wrong? <a href="#" id="reportLink">Report it</a> with one click: your program and machine are filled in for you.</p>
   </section>
 
   <p class="section-label">Examples, or try your own</p>

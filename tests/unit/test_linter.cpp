@@ -112,6 +112,14 @@ TEST_CASE("LN008 cutting with no tool loaded, reported once") {
   CHECK(count_code(lint_text("T1\nS100 M3\nF100\nG1 X1"), "LN008") == 1);  // T without M6 isn't loaded
 }
 
+TEST_CASE("LN008 is off for machines without a tool changer") {
+  MachineConfig m = mill();
+  m.tool_changer = false;
+  CHECK(count_code(lint_text("S100 M3\nF100\nG1 X1", m), "LN008") == 0);
+  CHECK(parse_machine_config(R"({"tool_changer": false})").tool_changer == false);
+  CHECK_THROWS_AS(parse_machine_config(R"({"tool_changer": "no"})"), ConfigError);
+}
+
 TEST_CASE("LN009 plunge deeper than the tool diameter") {
   auto d = lint_text(std::string(kGood) + "G0 X0 Y0 Z5\nG1 Z-7");
   REQUIRE(count_code(d, "LN009") == 1);

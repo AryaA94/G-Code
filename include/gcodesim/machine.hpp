@@ -24,6 +24,9 @@ struct MachineConfig {
   double max_feed_mm_min = 5000.0;  // LN007 limit for programmed F
   double junction_deviation_mm = 0.01;
   double tool_change_time_s = 5.0;
+  // false for machines without an automatic changer (most GRBL routers):
+  // the operator swaps the bit by hand, so programs often never say M6
+  bool tool_changer = true;
   std::array<double, 3> travel_min{-1e9, -1e9, -1e9};
   std::array<double, 3> travel_max{1e9, 1e9, 1e9};
   bool has_travel = false;

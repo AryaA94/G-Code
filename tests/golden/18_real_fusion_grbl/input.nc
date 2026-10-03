@@ -1,0 +1,31 @@
+%
+(1001)
+(Machine)
+(  vendor: Carbide 3D)
+(T1  D=3.175 CR=0 - ZMIN=-2 - flat end mill)
+G90 G94
+G17
+G21
+
+(2D Adaptive1)
+T1
+S12000 M3
+G54
+G0 X10 Y10
+G0 Z15
+G1 Z5 F1000
+G1 Z-2 F250
+G1 X50 F1000
+G2 X55 Y15 I0 J5
+G1 Y45
+G3 X50 Y50 I-5 J0
+G1 X10
+G1 Y10
+G0 Z15
+M5
+G28 G91 Z0
+G90
+G28 G91 X0 Y0
+G90
+M30
+%

@@ -1,0 +1,58 @@
+{
+  "lint": {
+    "diagnostics": [],
+    "errors": 0,
+    "warnings": 0
+  },
+  "stats": {
+    "all_bounds": {
+      "max": [
+        55.0,
+        50.0,
+        75.0
+      ],
+      "min": [
+        -100.0,
+        -100.0,
+        -2.0
+      ]
+    },
+    "cut_bounds": {
+      "max": [
+        55.0,
+        50.0,
+        15.0
+      ],
+      "min": [
+        10.0,
+        10.0,
+        -2.0
+      ]
+    },
+    "feed_mm_min": {
+      "max": 1000.0,
+      "min": 250.0
+    },
+    "length_mm": {
+      "cutting": 198.416,
+      "rapid": 448.127
+    },
+    "lines": 31,
+    "max_spindle_rpm": 12000.0,
+    "moves": {
+      "arc": 2,
+      "dwells": 0,
+      "linear": 6,
+      "pauses": 0,
+      "rapid": 7,
+      "tool_changes": 0
+    },
+    "time_s": {
+      "cutting": 13.3304,
+      "other": 0.0,
+      "rapid": 5.75151,
+      "total": 19.0819
+    },
+    "tools": []
+  }
+}

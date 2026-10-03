@@ -6,7 +6,7 @@
 //   cd web/tests && npm install && node ui_test.mjs
 // Needs the native CLI at ../../build/gcode-sim (override with GCODESIM_CLI).
 import { execFileSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
@@ -114,6 +114,24 @@ await page.click('#playBtn');
 await page.waitForTimeout(500);
 const t = await page.evaluate(() => play.t);
 check(t > 0.5, `playback advances (t = ${t.toFixed(2)} s after 0.5 s of playback)`);
+
+// real-world programs: a GRBL router file needs no M6, an inch file is converted
+const grbl = readFileSync(resolve(root, 'examples/real/grbl_hobby.gcode'), 'utf8');
+await page.selectOption('#machineSelect', 'hobby_router_grbl');
+await page.fill('#code', grbl);
+await page.waitForFunction(() => result && result.stats.moves.linear === 5);
+check(await page.evaluate(() => result.lint.errors + result.lint.warnings === 0), 'GRBL program on the hobby router: no errors or warnings');
+const inch = readFileSync(resolve(root, 'examples/real/fusion_haas_inch.nc'), 'utf8');
+await page.selectOption('#machineSelect', 'haas_vf2');
+await page.fill('#code', inch);
+await page.waitForFunction(() => result && result.stats.cut_bounds && result.stats.cut_bounds.min[2] < -3);
+const zmin = await page.evaluate(() => result.stats.cut_bounds.min[2]);
+check(Math.abs(zmin + 3.175) < 1e-6, `inch program: Z-0.125 in reads as ${zmin} mm`);
+
+// the feedback link carries the program and machine
+const fb = new URL(await page.evaluate(() => feedbackUrl()));
+const body = fb.searchParams.get('body');
+check(fb.pathname.endsWith('/issues/new') && body.includes('O01002') && body.includes('Haas VF-2'), 'feedback link includes the program and machine');
 
 check(errors.length === 0, `no page errors${errors.length ? ': ' + errors.join('; ') : ''}`);
 await browser.close();

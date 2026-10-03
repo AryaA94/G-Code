@@ -59,6 +59,7 @@ MachineConfig parse_machine_config(std::string_view json_text) {
                                               "max_feed_mm_min",
                                               "junction_deviation_mm",
                                               "tool_change_time_s",
+                                              "tool_changer",
                                               "travel_mm",
                                               "work_offsets",
                                               "tools",
@@ -77,6 +78,9 @@ MachineConfig parse_machine_config(std::string_view json_text) {
       m.max_feed_mm_min = positive(v, key);
     } else if (key == "junction_deviation_mm") {
       m.junction_deviation_mm = non_negative(v, key);
+    } else if (key == "tool_changer") {
+      if (!v.is_boolean()) throw ConfigError("tool_changer must be true or false");
+      m.tool_changer = v.get<bool>();
     } else if (key == "tool_change_time_s") {
       m.tool_change_time_s = non_negative(v, key);
     } else if (key == "travel_mm") {

@@ -12,10 +12,11 @@ namespace gcodesim {
 namespace {
 
 // Parse a plain decimal ("12", "-0.5"). std::from_chars for double is the
-// fast path; Apple's libc++ before LLVM 17 doesn't have it, so fall back to
-// a stream fixed to the "C" locale (so ',' is never taken as the point).
+// fast path, but libc++ (Apple's in particular) has long lacked it whatever
+// its version number says, so with libc++ use a stream fixed to the "C"
+// locale (so ',' is never taken as the decimal point).
 bool parse_double(const std::string& s, double& value) {
-#if defined(_LIBCPP_VERSION) && _LIBCPP_VERSION < 170000
+#if defined(_LIBCPP_VERSION)
   std::istringstream in(s);
   in.imbue(std::locale::classic());
   in >> value;

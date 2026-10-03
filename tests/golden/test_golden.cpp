@@ -72,9 +72,23 @@ bool close_enough(const json& a, const json& b, std::string path, std::string& w
 
 }  // namespace
 
+// std::getenv is fine here, but MSVC warns about it (C4996) and the build
+// treats warnings as errors.
+static bool env_set(const char* name) {
+#ifdef _MSC_VER
+  char* v = nullptr;
+  std::size_t len = 0;
+  const bool set = _dupenv_s(&v, &len, name) == 0 && v != nullptr;
+  std::free(v);
+  return set;
+#else
+  return std::getenv(name) != nullptr;
+#endif
+}
+
 TEST_CASE("golden files") {
   const fs::path root = GCODESIM_GOLDEN_DIR;
-  const bool update = std::getenv("GCODESIM_UPDATE_GOLDEN") != nullptr;
+  const bool update = env_set("GCODESIM_UPDATE_GOLDEN");
   int cases = 0;
 
   std::vector<fs::path> dirs;

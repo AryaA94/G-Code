@@ -1,6 +1,6 @@
 {
   "name": "Haas VF-2 (vertical machining center)",
-  "comment": "Common job-shop VMC. Travels, rapids, max feed and tool change from Haas's published specs; acceleration is an estimate.",
+  "comment": "Common job-shop VMC. Travels, rapids, max feed and tool change are approximate, based on published specs; acceleration is an estimate.",
   "max_rate_mm_min": {
     "x": 25400,
     "y": 25400,

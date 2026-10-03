@@ -3,9 +3,30 @@
 #include <cctype>
 #include <charconv>
 #include <cmath>
+#include <locale>
+#include <sstream>
 #include <string>
 
 namespace gcodesim {
+
+namespace {
+
+// Parse a plain decimal ("12", "-0.5"). std::from_chars for double is the
+// fast path; Apple's libc++ before LLVM 17 doesn't have it, so fall back to
+// a stream fixed to the "C" locale (so ',' is never taken as the point).
+bool parse_double(const std::string& s, double& value) {
+#if defined(_LIBCPP_VERSION) && _LIBCPP_VERSION < 170000
+  std::istringstream in(s);
+  in.imbue(std::locale::classic());
+  in >> value;
+  return !in.fail() && in.peek() == std::char_traits<char>::eof() && std::isfinite(value);
+#else
+  auto [ptr, ec] = std::from_chars(s.data(), s.data() + s.size(), value);
+  return ec == std::errc() && ptr == s.data() + s.size() && std::isfinite(value);
+#endif
+}
+
+}  // namespace
 
 namespace {
 
@@ -92,8 +113,7 @@ LexedLine lex_line(std::string_view text, int line_no, std::vector<Diagnostic>& 
     if (number.size() > 1 && number[0] == '-' && number[1] == '.') number.insert(1, "0");
 
     double value = 0.0;
-    auto [ptr, ec] = std::from_chars(number.data(), number.data() + number.size(), value);
-    if (ec != std::errc() || ptr != number.data() + number.size() || !std::isfinite(value)) {
+    if (!parse_double(number, value)) {
       error("GC005", letter_pos, "number '" + number + "' is out of range");
       continue;
     }

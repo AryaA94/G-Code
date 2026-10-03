@@ -1,6 +1,6 @@
 {
   "name": "Tormach 1100MX (personal CNC mill)",
-  "comment": "Prosumer mill with an automatic tool changer. Published specs; acceleration is an estimate.",
+  "comment": "Prosumer mill with an automatic tool changer. Figures are approximate, based on published specs; acceleration is an estimate.",
   "max_rate_mm_min": {
     "x": 7620,
     "y": 7620,

@@ -1,6 +1,6 @@
 {
   "name": "DMG MORI DMU 50 (5-axis, run as 3-axis)",
-  "comment": "High-end universal machining center. Linear axes only; published specs, acceleration is an estimate.",
+  "comment": "High-end universal machining center. Linear axes only. Figures are approximate, based on published specs; acceleration is an estimate.",
   "max_rate_mm_min": {
     "x": 30000,
     "y": 30000,

@@ -22,12 +22,12 @@ jobs:
   test:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Build the native CLI (the reference the page is compared with)
         run: |
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DGCODESIM_BUILD_TESTS=OFF -DGCODESIM_BUILD_BENCH=OFF
           cmake --build build -j 4 --target gcode-sim
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
       - name: End-to-end test of the page to be deployed
@@ -44,14 +44,14 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Stage the page as index.html
         run: |
           mkdir -p _site
           cp web/dist/gcode-sim-web.html _site/index.html
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: _site
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

@@ -66,7 +66,7 @@ print("const GS_EXAMPLES = " + json.dumps(programs) + ";")
 print("const GS_MACHINE = " + json.dumps((ex / "machine.json").read_text()) + ";")
 machines = [{"key": p.stem, "name": json.loads(p.read_text())["name"], "json": p.read_text()}
             for p in sorted((ex / "machines").glob("*.json"))]
-order = ["haas_vf2", "haas_mini_mill", "dmg_dmu50", "tormach_1100mx", "hobby_router_grbl"]
+order = ["haas_vf2", "haas_vf5_50", "gantry_plate_mill", "haas_mini_mill", "dmg_dmu50", "tormach_1100mx", "hobby_router_grbl"]
 machines.sort(key=lambda m: order.index(m["key"]) if m["key"] in order else len(order))
 print("const GS_MACHINES = " + json.dumps(machines) + ";")
 PYEOF

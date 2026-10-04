@@ -1,0 +1,81 @@
+{
+  "name": "Haas VF-5/50 (CAT50 vertical machining center)",
+  "comment": "50-taper VMC for heavy cuts in steel plate. Figures are approximate, based on published specs; acceleration is an estimate. Tool table is a plate-drilling example: edit it to match your shop.",
+  "max_rate_mm_min": {
+    "x": 18000,
+    "y": 18000,
+    "z": 18000
+  },
+  "accel_mm_s2": {
+    "x": 2500,
+    "y": 2500,
+    "z": 2000
+  },
+  "max_feed_mm_min": 16500,
+  "junction_deviation_mm": 0.02,
+  "tool_change_time_s": 4.5,
+  "stock_material": "ar500",
+  "travel_mm": {
+    "x": [
+      -635.0,
+      635.0
+    ],
+    "y": [
+      -330.0,
+      330.0
+    ],
+    "z": [
+      -635,
+      0
+    ]
+  },
+  "work_offsets": {
+    "G54": {
+      "x": -300,
+      "y": 0,
+      "z": -381
+    },
+    "G55": {
+      "x": 0,
+      "y": 0,
+      "z": -381
+    }
+  },
+  "tools": {
+    "1": {
+      "diameter_mm": 16,
+      "length_mm": 110,
+      "flutes": 4,
+      "material": "carbide",
+      "comment": "16 mm carbide end mill, 4 flute"
+    },
+    "2": {
+      "diameter_mm": 12,
+      "length_mm": 90,
+      "flutes": 2,
+      "material": "carbide",
+      "comment": "12 mm 90 degree spot drill"
+    },
+    "3": {
+      "diameter_mm": 10.2,
+      "length_mm": 120,
+      "flutes": 2,
+      "material": "carbide",
+      "comment": "10.2 mm carbide drill (M12 tap drill)"
+    },
+    "4": {
+      "diameter_mm": 12,
+      "length_mm": 110,
+      "flutes": 3,
+      "material": "hss",
+      "comment": "M12 x 1.75 spiral-point tap"
+    },
+    "5": {
+      "diameter_mm": 50,
+      "length_mm": 80,
+      "flutes": 5,
+      "material": "carbide",
+      "comment": "50 mm face mill, 5 inserts"
+    }
+  }
+}

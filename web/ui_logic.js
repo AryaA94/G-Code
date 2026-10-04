@@ -15,7 +15,24 @@ const PRESETS = [
   { key: 'contour',     tag: 'LOOK-AHEAD',     title: 'Wavy groove, 200 tiny segments' },
   { key: 'drill_plate', tag: 'PECK DRILL',     title: '12 holes with G83 pecking' },
   { key: 'lint_demo',   tag: 'LINT',           title: 'A program full of mistakes' },
+  { key: 'plate_drill_tap', tag: 'PLATE',       title: 'Face, drill and tap 4140 plate', machine: 'haas_vf5_50' },
 ];
+
+// Must match src/materials.cpp (the browser test checks every key is accepted).
+const MATERIALS = [
+  ['aluminum_6061', 'Aluminum 6061'],
+  ['aluminum_7075', 'Aluminum 7075'],
+  ['mild_steel', 'Mild steel (A36, 1018)'],
+  ['alloy_steel', 'Alloy steel, Q&T (4140, HS 100)'],
+  ['ar400', 'AR400 plate (~400 BHN)'],
+  ['ar500', 'AR500 plate (~500 BHN)'],
+  ['hardened_600', 'Hardened plate (~600 BHN)'],
+  ['stainless_304', 'Stainless 304'],
+  ['titanium_ti6al4v', 'Titanium Ti-6Al-4V (TC4)'],
+];
+
+// Private feedback goes here. Leave empty to hide the email option.
+const FEEDBACK_EMAIL = '';
 const OWN = { key: 'own', tag: 'YOUR OWN', title: 'Write, paste or open your own program' };
 const OWN_STARTER = `(Your program. Paste G-code here, or use Open file below.)
 (Units mm. Tools T1-T4 are set up in the machine config.)
@@ -76,8 +93,17 @@ function machineList() {
   return list;
 }
 
+// The machine JSON with the chosen stock material applied. Broken JSON is
+// passed through untouched so the engine reports the error.
 function machineConfig() {
-  return $('machineSelect').value ? $('machineJson').value : '';
+  const stock = $('stockSelect').value;
+  if (!$('machineSelect').value) return stock ? JSON.stringify({ stock_material: stock }) : '';
+  const text = $('machineJson').value;
+  let cfg;
+  try { cfg = JSON.parse(text); } catch (e) { return text; }
+  if (!cfg || typeof cfg !== 'object' || Array.isArray(cfg)) return text;
+  if (stock) cfg.stock_material = stock; else delete cfg.stock_material;
+  return JSON.stringify(cfg);
 }
 
 function selectMachine(key) {
@@ -88,6 +114,9 @@ function selectMachine(key) {
   let note = 'Generic defaults: no travel limits and no tool table, so the tool and travel checks are off.';
   if (m) { try { note = JSON.parse(m.json).comment || ''; } catch (e) { note = ''; } }
   $('machineNote').textContent = note;
+  let stock = '';
+  if (m) { try { stock = JSON.parse(m.json).stock_material || ''; } catch (e) { stock = ''; } }
+  $('stockSelect').value = stock;
 }
 
 function run({ refit = false } = {}) {
@@ -127,8 +156,8 @@ function showError(msg) {
 // A pre-filled GitHub issue: what happened, plus the program and machine so
 // the report can be reproduced. URLs have a length limit, so long programs
 // are cut and the reporter is asked to attach the file instead.
-function feedbackUrl() {
-  const code = $('code').value;
+function feedbackUrl(withProgram = true) {
+  const code = withProgram ? $('code').value : '(not included)';
   const limit = 5000;
   const program = code.length > limit
     ? code.slice(0, limit) + '\n(... cut here: please attach the full file to this issue)'
@@ -154,6 +183,54 @@ ${program}
 \`\`\`
 </details>`;
   return `${REPO}/issues/new?` + new URLSearchParams({ title: 'Feedback: ', body, labels: 'feedback' });
+}
+
+// Private feedback by email. mailto links are short, so the program is cut
+// sooner and the sender is asked to attach the file.
+function feedbackMailto() {
+  const code = $('code').value;
+  const limit = 1500;
+  const sel = $('machineSelect');
+  const machine = sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text : 'none';
+  const body = `What happened, or what should be different?\n\n\nMachine: ${machine}\n` +
+    `Material: ${$('stockSelect').value || 'not set'}\n\nProgram` +
+    (code.length > limit ? ' (first part; please attach the full file):\n' : ':\n') + code.slice(0, limit);
+  return `mailto:${FEEDBACK_EMAIL}?` + new URLSearchParams({ subject: 'gcode-sim feedback', body }).toString().replace(/\+/g, '%20');
+}
+
+function openFeedback() {
+  const dlg = $('feedbackDialog');
+  $('fbEmail').hidden = !FEEDBACK_EMAIL;
+  if (!dlg.showModal) { window.open(feedbackUrl(false), '_blank', 'noopener'); return; }
+  dlg.returnValue = 'cancel';
+  dlg.showModal();
+}
+
+function onFeedbackChoice() {
+  const choice = $('feedbackDialog').returnValue;
+  if (choice === 'public-program' || choice === 'public-plain') {
+    track('feedback-' + choice);
+    window.open(feedbackUrl(choice === 'public-program'), '_blank', 'noopener');
+  } else if (choice === 'email' && FEEDBACK_EMAIL) {
+    track('feedback-email');
+    window.location.href = feedbackMailto();
+  }
+}
+
+// Save the whole tool as one HTML file that runs without internet. The page
+// is already self-contained, so this just saves the page's own source.
+async function downloadOffline() {
+  track('offline-download');
+  let html = null;
+  try {
+    const r = await fetch(location.href, { cache: 'force-cache' });
+    if (r.ok) html = await r.text();
+  } catch (e) { /* not fetchable here */ }
+  if (!html || !html.includes('GcodeSimModule')) {
+    toast('Could not read the page here. Download web/dist/gcode-sim-web.html from GitHub instead.');
+    return;
+  }
+  download('gcode-sim.html', html, 'text/html');
 }
 
 function track(name) {
@@ -198,7 +275,11 @@ function buildPresets() {
     b.dataset.key = p.key;
     b.dataset.tag = p.tag;
     b.textContent = p.title;
-    b.addEventListener('click', () => { loadPreset(p.key); track('example-' + p.key); });
+    b.addEventListener('click', () => {
+      if (p.machine && $('machineSelect').value !== p.machine) selectMachine(p.machine);
+      loadPreset(p.key);
+      track('example-' + p.key);
+    });
     box.appendChild(b);
   }
 }
@@ -666,7 +747,7 @@ function renderDiagnostics(r) {
     (infos ? `<span class="pill">${infos} note${infos === 1 ? '' : 's'}</span>` : '');
   const box = $('diags');
   if (!l.diagnostics.length) {
-    box.innerHTML = '<div class="diag-empty"><b>No problems found.</b> All nine lint rules and the parser are happy.</div>';
+    box.innerHTML = `<div class="diag-empty"><b>No problems found.</b> All ${$('rules').children.length / 2} lint rules and the parser are happy.</div>`;
     return;
   }
   box.innerHTML = l.diagnostics.map((d, i) =>
@@ -807,6 +888,10 @@ function wire() {
   const sel = $('machineSelect');
   for (const m of machineList()) sel.add(new Option(m.name, m.key));
   sel.add(new Option('No config: generic defaults', ''));
+  const stockSel = $('stockSelect');
+  stockSel.add(new Option('Not set (no speed and feed checks)', ''));
+  for (const [key, label] of MATERIALS) stockSel.add(new Option(label, key));
+  stockSel.addEventListener('change', () => { run(); track('material-' + (stockSel.value || 'none')); });
   selectMachine(machineList()[0].key);
   renderPlayIcon();
   // Inside Claude, downloads go through the viewer's save dialog.
@@ -849,12 +934,12 @@ function wire() {
   });
   // Fill the issue link at click time so it carries the current program.
   for (const id of ['feedbackBtn', 'reportLink']) {
-    $(id).addEventListener('click', e => {
-      e.preventDefault();
-      track('feedback');
-      window.open(feedbackUrl(), '_blank', 'noopener');
-    });
+    $(id).addEventListener('click', e => { e.preventDefault(); openFeedback(); });
   }
+  $('feedbackDialog').addEventListener('close', onFeedbackChoice);
+  // Already a local file: nothing to download.
+  if (location.protocol === 'file:') $('offlineBtn').hidden = true;
+  $('offlineBtn').addEventListener('click', e => { e.preventDefault(); downloadOffline(); });
   startCounting();
   $('runBtn').addEventListener('click', () => { clearTimeout(runTimer); run(); });
   $('machineSelect').addEventListener('change', () => { selectMachine($('machineSelect').value); run(); track('machine-' + ($('machineSelect').value || 'none')); });

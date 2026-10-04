@@ -8,13 +8,18 @@ namespace gcodesim {
 
 namespace {
 
+// Canned drilling, tapping and boring cycles (motion modes, in tenths).
+bool is_cycle(int motion) {
+  return motion == 730 || (motion >= 810 && motion <= 860) || motion == 890;
+}
+
 constexpr double kEps = 1e-9;
 constexpr double kPeckClearanceMm = 0.254;  // how far above the last peck G83 rapids back to (LinuxCNC value)
 
 // Modal state: everything a G-code line can change that stays in effect for
 // the lines after it.
 struct ModalState {
-  int motion = 0;  // tenths: 0, 10, 20, 30, 800 (none), 810, 820, 830
+  int motion = 0;  // tenths: 0, 10, 20, 30, 800 (none), 730, 810-860, 890
   Plane plane = Plane::XY;
   bool inches = false;
   bool incremental = false;
@@ -227,10 +232,10 @@ class Interpreter {
 
   void motion(const Block& b, bool axes_used) {
     int new_motion = -1;
-    for (int g : {0, 10, 20, 30, 800, 810, 820, 830})
+    for (int g : {0, 10, 20, 30, 800, 730, 810, 820, 830, 840, 850, 860, 890})
       if (b.has_g(g)) new_motion = g;
     if (new_motion >= 0) {
-      if (new_motion < 810) s_.cycle_active = false;
+      if (!is_cycle(new_motion)) s_.cycle_active = false;
       s_.motion = new_motion;
     }
     if (axes_used) return;
@@ -341,9 +346,11 @@ class Interpreter {
       note(Severity::Error, "GC018", b.line, 0, "drilling cycle needs both R (retract plane) and Z (depth)");
       return;
     }
-    if (s_.motion == 830 && (s_.cycle_q <= 0.0 || (s_.cycle_r - s_.cycle_z) / s_.cycle_q > 10000.0)) {
+    const bool pecking = s_.motion == 830 || s_.motion == 730;
+    if (pecking && (s_.cycle_q <= 0.0 || (s_.cycle_r - s_.cycle_z) / s_.cycle_q > 10000.0)) {
       note(Severity::Error, "GC019", b.line, 0,
-           "G83 peck drilling needs a peck depth Q greater than 0 (and at most 10000 pecks)");
+           std::string(s_.motion == 830 ? "G83" : "G73") +
+               " peck drilling needs a peck depth Q greater than 0 (and at most 10000 pecks)");
       return;
     }
 
@@ -370,7 +377,15 @@ class Interpreter {
     if (norm(over - pos_) > kEps) move_to(MoveType::Rapid, over, b.line);
     rapid_z(r);
 
+    auto dwell = [&]() {
+      if (s_.cycle_p <= 0.0) return;
+      Segment seg = base(MoveType::Dwell, b.line);
+      seg.dwell_s = s_.cycle_p;
+      out_.segments.push_back(seg);
+    };
+
     if (s_.motion == 830) {
+      // G83: full retract to R after every peck to clear chips
       double depth = r;
       while (depth > z + kEps) {
         double next = std::max(depth - s_.cycle_q, z);
@@ -379,13 +394,26 @@ class Interpreter {
         depth = next;
         if (depth > z + kEps) rapid_z(r);
       }
-    } else {
-      feed_z(z);
-      if (s_.motion == 820 && s_.cycle_p > 0.0) {
-        Segment seg = base(MoveType::Dwell, b.line);
-        seg.dwell_s = s_.cycle_p;
-        out_.segments.push_back(seg);
+    } else if (s_.motion == 730) {
+      // G73: high-speed peck, only backs off a little to break the chip
+      double depth = r;
+      while (depth > z + kEps) {
+        double next = std::max(depth - s_.cycle_q, z);
+        feed_z(next);
+        depth = next;
+        if (depth > z + kEps) rapid_z(depth + kPeckClearanceMm);
       }
+    } else if (s_.motion == 840 || s_.motion == 850 || s_.motion == 890) {
+      // G84 tap: feed in, spindle reverses, feed back out at the same rate.
+      // G85 / G89 bore: feed in, (G89 dwells), feed out.
+      feed_z(z);
+      if (s_.motion != 850) dwell();
+      feed_z(r);
+    } else {
+      // G81 drill, G82 drill + dwell, G86 bore with the spindle stopped
+      // before the rapid out (spin-up time isn't modelled)
+      feed_z(z);
+      if (s_.motion == 820) dwell();
     }
     rapid_z(s_.retract_to_r ? r : std::max(r, s_.cycle_initial_z));
     for (std::size_t i = first; i < out_.segments.size(); ++i) out_.segments[i].from_cycle = true;

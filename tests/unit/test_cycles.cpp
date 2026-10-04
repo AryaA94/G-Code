@@ -80,3 +80,43 @@ TEST_CASE("G0 cancels a cycle, so a new G81 records a new initial Z") {
   auto m = moves(run("G0 Z10\nG98 G81 X1 Z-1 R1 F100\nG0 Z20\nG81 X2 Z-1 R1\n"));
   CHECK(m.back().end.z == 20.0);
 }
+
+TEST_CASE("G73 high-speed peck backs off a little, not to R") {
+  auto m = moves(run("G0 Z10\nG98 G73 X0 Z-3 R1 Q1 F100"));
+  std::vector<double> feeds, rapids_after_start;
+  for (std::size_t i = 1; i < m.size(); ++i)
+    (m[i].type == MoveType::Linear ? feeds : rapids_after_start).push_back(m[i].end.z);
+  CHECK(feeds == std::vector<double>{0.0, -1.0, -2.0, -3.0});
+  // chip breaks at 0.254 above each peck, never back up to R in between
+  for (double z : rapids_after_start) CHECK((z == 10.0 || z == 1.0 || z < 0.3));
+  CHECK(m.back().end.z == 10.0);
+}
+
+TEST_CASE("G73 without Q is an error") {
+  CHECK(has_code(run("G0 Z5\nG73 X0 Z-3 R1 F100").diagnostics, "GC019"));
+}
+
+TEST_CASE("G84 tap feeds in and back out at the feed rate") {
+  auto m = moves(run("S500 M3\nG0 Z10\nG99 G84 X0 Z-8 R2 F625"));
+  REQUIRE(m.size() >= 3);
+  const auto& in = m[m.size() - 2];
+  const auto& out = m[m.size() - 1];
+  CHECK(in.type == MoveType::Linear);
+  CHECK(in.end.z == -8.0);
+  CHECK(out.type == MoveType::Linear);  // retract is fed, not rapid
+  CHECK(out.end.z == 2.0);
+  CHECK(out.from_cycle);
+}
+
+TEST_CASE("G85 bores in and out; G89 dwells; G86 rapids out") {
+  auto in_out = [](const char* g) {
+    auto m = moves(run(std::string("G0 Z10\nG99 ") + g + " X0 Z-5 R1 P0.5 F100"));
+    return m.back().type;
+  };
+  CHECK(in_out("G85") == MoveType::Linear);
+  CHECK(in_out("G89") == MoveType::Linear);
+  CHECK(in_out("G86") == MoveType::Rapid);
+  bool dwell = false;
+  for (const auto& s : run("G0 Z10\nG89 X0 Z-5 R1 P0.5 F100").segments) dwell |= s.type == MoveType::Dwell;
+  CHECK(dwell);
+}

@@ -5,6 +5,8 @@
 #include <set>
 #include <sstream>
 
+#include "gcodesim/materials.hpp"
+
 namespace gcodesim {
 
 namespace {
@@ -60,6 +62,7 @@ MachineConfig parse_machine_config(std::string_view json_text) {
                                               "junction_deviation_mm",
                                               "tool_change_time_s",
                                               "tool_changer",
+                                              "stock_material",
                                               "travel_mm",
                                               "work_offsets",
                                               "tools",
@@ -78,6 +81,14 @@ MachineConfig parse_machine_config(std::string_view json_text) {
       m.max_feed_mm_min = positive(v, key);
     } else if (key == "junction_deviation_mm") {
       m.junction_deviation_mm = non_negative(v, key);
+    } else if (key == "stock_material") {
+      if (!v.is_string()) throw ConfigError("stock_material must be a string");
+      m.stock_material = v.get<std::string>();
+      if (!m.stock_material.empty() && !find_material(m.stock_material)) {
+        std::string known_list;
+        for (const auto& mat : materials()) known_list += (known_list.empty() ? "" : ", ") + mat.key;
+        throw ConfigError("unknown stock_material \"" + m.stock_material + "\" (known: " + known_list + ")");
+      }
     } else if (key == "tool_changer") {
       if (!v.is_boolean()) throw ConfigError("tool_changer must be true or false");
       m.tool_changer = v.get<bool>();
@@ -125,7 +136,15 @@ MachineConfig parse_machine_config(std::string_view json_text) {
             tool.diameter_mm = positive(tv, "tools." + num + ".diameter_mm");
           else if (tk == "length_mm")
             tool.length_mm = non_negative(tv, "tools." + num + ".length_mm");
-          else if (tk != "comment")
+          else if (tk == "flutes") {
+            if (!tv.is_number_integer() || tv.get<int>() < 1 || tv.get<int>() > 20)
+              throw ConfigError("tools." + num + ".flutes must be a whole number from 1 to 20");
+            tool.flutes = tv.get<int>();
+          } else if (tk == "material") {
+            if (!tv.is_string() || (tv != "carbide" && tv != "hss"))
+              throw ConfigError("tools." + num + ".material must be \"carbide\" or \"hss\"");
+            tool.hss = tv == "hss";
+          } else if (tk != "comment")
             throw ConfigError("tools." + num + " has unknown key \"" + tk + "\"");
         }
         m.tools[n] = tool;

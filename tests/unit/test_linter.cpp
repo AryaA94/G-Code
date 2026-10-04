@@ -29,11 +29,12 @@ TEST_CASE("a clean program has no lint") {
   CHECK(d.empty());
 }
 
-TEST_CASE("there are nine rules with unique codes and summaries") {
+TEST_CASE("there are eleven rules with unique codes and summaries") {
   auto rules = make_default_rules();
-  REQUIRE(rules.size() == 9);
+  REQUIRE(rules.size() == 11);
   for (std::size_t i = 0; i < rules.size(); ++i) {
-    CHECK(rules[i]->code() == "LN00" + std::to_string(i + 1));
+    std::string n = std::to_string(i + 1);
+    CHECK(rules[i]->code() == "LN" + std::string(3 - n.size(), '0') + n);
     CHECK_FALSE(rules[i]->summary().empty());
   }
 }
@@ -146,4 +147,66 @@ TEST_CASE("LN009 applies to ramps and helixes, not just vertical plunges") {
 TEST_CASE("lint output is sorted by line") {
   auto d = lint_text("G1 X1\nG0 Z-5\nG0 X9999");
   for (std::size_t i = 1; i < d.size(); ++i) CHECK(d[i - 1].line <= d[i].line);
+}
+
+namespace {
+// 10 mm carbide 4-flute end mill in AR500 (usual 35-70 m/min: ~1110-2230 rpm,
+// 0.025-0.06 mm/tooth)
+MachineConfig plate() {
+  MachineConfig m = mill();
+  m.stock_material = "ar500";
+  Tool t;
+  t.diameter_mm = 10;
+  t.flutes = 4;
+  m.tools[5] = t;
+  return m;
+}
+const char* kPlateStart = "T5 M6\nG0 X0 Y0 Z5\n";
+}  // namespace
+
+TEST_CASE("LN010 flags a spindle speed far too fast for the material") {
+  auto fast = lint_text(std::string(kPlateStart) + "S6000 M3\nG1 Z-1 F400\nG1 X20", plate());
+  CHECK(count_code(fast, "LN010") == 1);
+  auto ok = lint_text(std::string(kPlateStart) + "S1800 M3\nG1 Z-1 F300\nG1 X20 F300", plate());
+  CHECK(count_code(ok, "LN010") == 0);
+}
+
+TEST_CASE("LN010 allows HSS only about a third of the carbide speed") {
+  MachineConfig m = plate();
+  m.tools[5].hss = true;
+  CHECK(count_code(lint_text(std::string(kPlateStart) + "S1800 M3\nG1 Z-1 F300\nG1 X20", m), "LN010") == 1);
+}
+
+TEST_CASE("LN010 and LN011 need a stock material") {
+  MachineConfig m = plate();
+  m.stock_material.clear();
+  auto d = lint_text(std::string(kPlateStart) + "S9000 M3\nG1 Z-1 F9000\nG1 X20", m);
+  CHECK(count_code(d, "LN010") == 0);
+  CHECK(count_code(d, "LN011") == 0);
+}
+
+TEST_CASE("LN011 flags heavy and rubbing chip loads, once per feed and speed") {
+  // 1800 rpm x 4 flutes: F2000 = 0.278 mm/tooth (heavy), F50 = 0.007 (rubbing)
+  auto heavy = lint_text(std::string(kPlateStart) + "S1800 M3\nG1 Z-1 F2000\nG1 X20\nG1 Y20", plate());
+  CHECK(count_code(heavy, "LN011") == 1);
+  auto rub = lint_text(std::string(kPlateStart) + "S1800 M3\nG1 Z-1 F50\nG1 X20", plate());
+  CHECK(count_code(rub, "LN011") == 1);
+  auto ok = lint_text(std::string(kPlateStart) + "S1800 M3\nG1 Z-1 F300\nG1 X20", plate());
+  CHECK(count_code(ok, "LN011") == 0);
+}
+
+TEST_CASE("stock_material and tool flutes/material are read from machine.json") {
+  auto m = parse_machine_config(R"({"stock_material": "titanium_ti6al4v",
+    "tools": {"1": {"diameter_mm": 8, "flutes": 3, "material": "hss"}}})");
+  CHECK(m.stock_material == "titanium_ti6al4v");
+  CHECK(m.tools.at(1).flutes == 3);
+  CHECK(m.tools.at(1).hss);
+  CHECK_THROWS_AS(parse_machine_config(R"({"stock_material": "cheese"})"), ConfigError);
+  CHECK_THROWS_AS(parse_machine_config(R"({"tools": {"1": {"diameter_mm": 8, "flutes": 0}}})"), ConfigError);
+  CHECK_THROWS_AS(parse_machine_config(R"({"tools": {"1": {"diameter_mm": 8, "material": "diamond"}}})"), ConfigError);
+}
+
+TEST_CASE("LN011 ignores slow plunges") {
+  auto d = lint_text(std::string(kPlateStart) + "S1800 M3\nG1 Z-2 F40\nG1 X20 F300", plate());
+  CHECK(count_code(d, "LN011") == 0);
 }

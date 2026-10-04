@@ -22,6 +22,11 @@ what Grbl and most Fanuc-style controls accept for these codes.
 | G81 | drill | X Y Z R |
 | G82 | drill with dwell | P seconds at the bottom |
 | G83 | peck drill | Q peck depth, retracts to R between pecks |
+| G73 | high-speed peck drill | Q peck depth, backs off 0.254 mm to break the chip |
+| G84 | rigid tap | feeds in and back out at F (F = S x pitch) |
+| G85 | bore | feeds in and out |
+| G86 | bore, spindle stop | feeds in, rapids out |
+| G89 | bore with dwell | feeds in, dwells P seconds, feeds out |
 | G90 / G91 | absolute / incremental | |
 | G90.1 / G91.1 | absolute / incremental arc centers | incremental is the default |
 | G92 | set the current position | |
@@ -29,7 +34,7 @@ what Grbl and most Fanuc-style controls accept for these codes.
 | G98 / G99 | drilling retract to initial Z / to R | |
 
 Recognised but **not supported** (error GC010): G41, G42 (cutter
-compensation), G73, G84-G89 (other cycles), G93, G95 (other feed modes),
+compensation), G87, G88 (back boring, manual boring), G93, G95 (other feed modes),
 G38.x (probing).
 
 ## M codes
@@ -77,7 +82,7 @@ printer files, get warning GC023.
 | GC016 | error | R-form full circle |
 | GC017 | error | G4 without P |
 | GC018 | error | drilling cycle without R or Z |
-| GC019 | error | G83 without a usable Q |
+| GC019 | error | G73 or G83 without a usable Q |
 | GC020 | error | drilling cycle in G91 |
 | GC021 | warning | M6 with no tool selected |
 | GC022 | warning | G43 for a tool that isn't in the machine config |

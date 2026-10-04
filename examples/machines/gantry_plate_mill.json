@@ -1,0 +1,81 @@
+{
+  "name": "Gantry plate mill (Quickmill-class)",
+  "comment": "Large gantry machine for drilling and milling big plates. Typical figures for this class of machine, not a specific model; acceleration is an estimate. Edit travel, speeds and tools to match yours.",
+  "max_rate_mm_min": {
+    "x": 20000,
+    "y": 20000,
+    "z": 10000
+  },
+  "accel_mm_s2": {
+    "x": 1000,
+    "y": 1000,
+    "z": 800
+  },
+  "max_feed_mm_min": 15000,
+  "junction_deviation_mm": 0.02,
+  "tool_change_time_s": 10,
+  "stock_material": "alloy_steel",
+  "travel_mm": {
+    "x": [
+      -1524.0,
+      1524.0
+    ],
+    "y": [
+      -1219.0,
+      1219.0
+    ],
+    "z": [
+      -400,
+      0
+    ]
+  },
+  "work_offsets": {
+    "G54": {
+      "x": -1200,
+      "y": -900,
+      "z": -240
+    },
+    "G55": {
+      "x": -900,
+      "y": -900,
+      "z": -240
+    }
+  },
+  "tools": {
+    "1": {
+      "diameter_mm": 16,
+      "length_mm": 110,
+      "flutes": 4,
+      "material": "carbide",
+      "comment": "16 mm carbide end mill, 4 flute"
+    },
+    "2": {
+      "diameter_mm": 12,
+      "length_mm": 90,
+      "flutes": 2,
+      "material": "carbide",
+      "comment": "12 mm 90 degree spot drill"
+    },
+    "3": {
+      "diameter_mm": 10.2,
+      "length_mm": 120,
+      "flutes": 2,
+      "material": "carbide",
+      "comment": "10.2 mm carbide drill (M12 tap drill)"
+    },
+    "4": {
+      "diameter_mm": 12,
+      "length_mm": 110,
+      "flutes": 3,
+      "material": "hss",
+      "comment": "M12 x 1.75 spiral-point tap"
+    },
+    "5": {
+      "diameter_mm": 50,
+      "length_mm": 80,
+      "flutes": 5,
+      "material": "carbide",
+      "comment": "50 mm face mill, 5 inserts"
+    }
+  }
+}

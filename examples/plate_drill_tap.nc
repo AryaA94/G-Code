@@ -1,0 +1,82 @@
+(PLATE: face, spot, drill and tap 6 x M12 in 4140 plate, 25 mm thick)
+(Material: alloy steel, Q&T. Machine: Haas VF-5/50 or gantry plate mill)
+G90 G94 G17
+G21
+G53 G0 Z0.
+
+(FACE 1 mm off the top)
+T5 M6
+S900 M3
+G54
+M8
+G0 X-35. Y10.
+G43 Z15. H5
+G0 Z2.
+G1 Z-1. F200.
+G1 X235. F450.
+G0 Z5.
+G0 X-35. Y50.
+G1 Z-1. F200.
+G1 X235. F450.
+G0 Z15.
+M9
+M5
+G53 G0 Z0.
+
+(SPOT DRILL)
+T2 M6
+S2000 M3
+G54
+M8
+G0 X25. Y20.
+G43 Z15. H2
+G0 Z5.
+G98 G81 X25. Y20. Z-4. R1. F160.
+X100.
+X175.
+Y60.
+X100.
+X25.
+G80
+M9
+M5
+G53 G0 Z0.
+
+(DRILL 10.2 THROUGH, HIGH-SPEED PECK)
+T3 M6
+S2800 M3
+G54
+M8
+G0 X25. Y20.
+G43 Z15. H3
+G0 Z5.
+G98 G73 X25. Y20. Z-29. R1. Q3. F420.
+X100.
+X175.
+Y60.
+X100.
+X25.
+G80
+M9
+M5
+G53 G0 Z0.
+
+(TAP M12 X 1.75)
+T4 M6
+S300 M3
+G54
+M8
+G0 X25. Y20.
+G43 Z15. H4
+G0 Z5.
+G98 G84 X25. Y20. Z-24. R3. F525.
+X100.
+X175.
+Y60.
+X100.
+X25.
+G80
+M9
+M5
+G53 G0 Z0.
+M30

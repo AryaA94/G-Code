@@ -102,6 +102,8 @@ textarea#code{
 kbd{ font-family:var(--mono); font-size:10.5px; border:1px solid var(--line-2); border-bottom-width:2px; border-radius:4px; padding:0 4px; color:var(--muted); }
 
 .field{ display:flex; flex-direction:column; gap:5px; min-width:0; }
+[hidden]{ display:none !important; }
+.field + .field{ margin-top:12px; }
 .field label{ font-size:11.5px; color:var(--muted); }
 input, select, textarea.json{
   width:100%; font:inherit; font-size:13px; color:var(--text);
@@ -206,6 +208,15 @@ footer a{ color:var(--muted); }
 .nav-links{ display:flex; gap:8px; }
 .hero-note{ margin-top:10px !important; font-size:13.5px !important; }
 .hero-note a{ color:var(--accent, #ff9d2e); }
+dialog#feedbackDialog{ max-width:520px; width:calc(100% - 32px); border:1px solid var(--line-2); border-radius:12px;
+  background:#151a20; color:#e7eaee; padding:22px; }
+dialog#feedbackDialog::backdrop{ background:rgba(0,0,0,.55); }
+dialog#feedbackDialog h2{ margin:0 0 10px; font-size:18px; }
+.fb-warn{ background:rgba(255,157,46,.1); border:1px solid rgba(255,157,46,.4); border-radius:8px; padding:10px 12px;
+  font-size:13.5px; line-height:1.5; margin:0 0 14px; }
+.fb-options{ display:flex; flex-direction:column; gap:8px; }
+.fb-foot{ margin:14px 0 0; font-size:12.5px; color:var(--muted); }
+.linkish{ background:none; border:0; color:var(--accent); cursor:pointer; font:inherit; padding:0; margin-left:6px; }
 .machine-note{ margin:8px 0 0; font-size:12px; line-height:1.45; color:var(--muted, #8a93a0); }
 .foot-btns{ display:flex; gap:8px; align-items:center; }
 .chip.own{ border-style:dashed; }
@@ -224,6 +235,7 @@ footer a{ color:var(--muted); }
     gcode-sim
   </a>
   <span class="nav-links">
+    <a class="nav-link" id="offlineBtn" href="#" title="Save this tool as one file that works without internet">Download for offline use</a>
     <a class="nav-link" id="feedbackBtn" href="https://github.com/AryaA94/G-Code/issues/new" target="_blank" rel="noopener">Send feedback</a>
     <a class="nav-link" href="https://github.com/AryaA94/G-Code" target="_blank" rel="noopener">Source on GitHub</a>
   </span>
@@ -236,7 +248,7 @@ footer a{ color:var(--muted); }
       from the machine's acceleration and corner speeds, and plays the toolpath back in 3D. Everything runs in your
       browser: it's the same code as the command-line tool, compiled to WebAssembly.
       Works with metric or inch (G20) programs from Fusion 360 and similar CAM, and GRBL routers.</p>
-    <p class="hero-note">Got a program it reads wrong? <a href="#" id="reportLink">Report it</a> with one click: your program and machine are filled in for you.</p>
+    <p class="hero-note">Got a program it reads wrong? <a href="#" id="reportLink">Report it</a>. You choose whether your program is included.</p>
   </section>
 
   <p class="section-label">Examples, or try your own</p>
@@ -270,6 +282,10 @@ footer a{ color:var(--muted); }
           <label for="machineSelect">Limits used for timing and checks</label>
           <select id="machineSelect"></select>
           <p class="machine-note" id="machineNote"></p>
+        </div>
+        <div class="field">
+          <label for="stockSelect">Stock material (for speed and feed checks)</label>
+          <select id="stockSelect"></select>
         </div>
         <details>
           <summary>Edit machine.json</summary>
@@ -351,5 +367,20 @@ footer a{ color:var(--muted); }
   </div>
 </main>
 
+
+<dialog id="feedbackDialog" aria-labelledby="fbTitle">
+  <form method="dialog">
+    <h2 id="fbTitle">Send feedback</h2>
+    <p class="fb-warn"><b>GitHub issues are public.</b> Anyone on the internet can read them. Don't include programs
+      for customer parts or anything your company treats as confidential.</p>
+    <div class="fb-options">
+      <button class="btn small" value="public-program">Public issue, include my program</button>
+      <button class="btn secondary small" value="public-plain">Public issue, without the program</button>
+      <button class="btn secondary small" id="fbEmail" value="email">Private email instead</button>
+    </div>
+    <p class="fb-foot">Your program never leaves your computer unless you choose an option above.
+      <button class="linkish" value="cancel">Cancel</button></p>
+  </form>
+</dialog>
 
 <script>

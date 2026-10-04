@@ -18,8 +18,8 @@ mistakes, estimates how long it will take to run, and draws the toolpath.
 - **Reads** a practical subset of milling G-code: lines, arcs in all three
   planes (I/J/K and R forms, helixes), inch and metric, absolute and
   incremental, work offsets G54-G59, G92, G53, G28, tool length offsets and
-  drilling cycles G81/G82/G83 ([full list](docs/SUPPORTED_GCODE.md)).
-- **Lints** with nine rules, from "rapid move into the stock" to "plunging
+  drilling, tapping and boring cycles G73, G81-G86, G89 ([full list](docs/SUPPORTED_GCODE.md)).
+- **Lints** with eleven rules, from "rapid move into the stock" to "plunging
   deeper than the tool is wide". Every message has a line, a column and a
   stable code, like a compiler.
 - **Estimates cycle time** from per-axis speed and acceleration limits, with

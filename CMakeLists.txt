@@ -59,6 +59,7 @@ add_library(gcodesim_core STATIC
   src/parser.cpp
   src/segment.cpp
   src/machine.cpp
+  src/materials.cpp
   src/interpreter.cpp
   src/planner.cpp
   src/linter.cpp

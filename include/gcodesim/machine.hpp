@@ -13,6 +13,8 @@ namespace gcodesim {
 struct Tool {
   double diameter_mm = 0.0;
   double length_mm = 0.0;
+  int flutes = 0;     // 0 = unknown: no chip-load check
+  bool hss = false;   // high-speed steel instead of carbide: slower speeds
 };
 
 // Everything the simulator needs to know about the machine. Rates are per
@@ -27,6 +29,8 @@ struct MachineConfig {
   // false for machines without an automatic changer (most GRBL routers):
   // the operator swaps the bit by hand, so programs often never say M6
   bool tool_changer = true;
+  // key from materials(), e.g. "ar500"; empty = unknown, no speed checks
+  std::string stock_material;
   std::array<double, 3> travel_min{-1e9, -1e9, -1e9};
   std::array<double, 3> travel_max{1e9, 1e9, 1e9};
   bool has_travel = false;

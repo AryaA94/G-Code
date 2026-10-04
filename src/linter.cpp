@@ -4,6 +4,10 @@
 #include <cmath>
 #include <cstdio>
 #include <set>
+#include <tuple>
+#include <utility>
+
+#include "gcodesim/materials.hpp"
 
 namespace gcodesim {
 
@@ -218,6 +222,91 @@ class DeepPlunge : public Rule {
   }
 };
 
+// LN010: spindle speed far outside the usual surface speed for this tool in
+// the stock material set in the machine config. Too fast burns the edge, which
+// is expensive in hard plate; very slow mostly costs time. Needs the
+// material and the tool's diameter. Reported once per tool and speed.
+class SurfaceSpeed : public Rule {
+ public:
+  std::string code() const override { return "LN010"; }
+  std::string summary() const override {
+    return "spindle speed is far from the usual surface speed for the tool and stock material";
+  }
+  void check(const std::vector<Segment>& segs, const MachineConfig& m,
+             std::vector<Diagnostic>& out) const override {
+    const Material* mat = find_material(m.stock_material);
+    if (!mat) return;
+    std::set<std::pair<int, long>> seen;
+    for (const auto& s : segs) {
+      if (!s.is_cutting() || !s.spindle_on || s.spindle_rpm <= 0.0) continue;
+      auto tool = m.tools.find(s.tool);
+      if (tool == m.tools.end()) continue;
+      if (!seen.insert({s.tool, std::lround(s.spindle_rpm)}).second) continue;
+      const double factor = tool->second.hss ? kHssSpeedFactor : 1.0;
+      const double lo = mat->vc_min_m_min * factor, hi = mat->vc_max_m_min * factor;
+      const double vc = surface_speed_m_min(tool->second.diameter_mm, s.spindle_rpm);
+      const double d = tool->second.diameter_mm;
+      auto rpm_for = [&](double v) { return std::lround(v * 1000.0 / (3.141592653589793 * d)); };
+      const std::string range = std::to_string(rpm_for(lo)) + "-" + std::to_string(rpm_for(hi)) + " rpm";
+      const std::string what = std::string(tool->second.hss ? "HSS" : "carbide") + " T" + std::to_string(s.tool) +
+                               " (" + mm(d) + " mm) in " + mat->label;
+      if (vc > hi * 1.15) {
+        out.push_back(make(Severity::Warning, code(), s,
+                           "S" + std::to_string(std::lround(s.spindle_rpm)) + " is " +
+                               std::to_string(std::lround(vc)) + " m/min, too fast for " + what +
+                               "; usual is about " + range));
+      } else if (vc < lo * 0.5 && !s.from_cycle) {
+        out.push_back(make(Severity::Info, code(), s,
+                           "S" + std::to_string(std::lround(s.spindle_rpm)) + " is slow for " + what +
+                               "; usual is about " + range));
+      }
+    }
+  }
+};
+
+// LN011: chip load (feed per tooth) far from the usual range for an end mill
+// of this size in the stock material. Too heavy breaks tools; too light rubs
+// instead of cutting, which work-hardens steel and titanium. Needs the
+// material and the tool's flute count; drilling and tapping cycles are
+// skipped (their feed is per revolution, not per tooth).
+class ChipLoad : public Rule {
+ public:
+  std::string code() const override { return "LN011"; }
+  std::string summary() const override { return "feed per tooth is far from the usual chip load for the tool and material"; }
+  void check(const std::vector<Segment>& segs, const MachineConfig& m,
+             std::vector<Diagnostic>& out) const override {
+    const Material* mat = find_material(m.stock_material);
+    if (!mat) return;
+    std::set<std::tuple<int, long, long>> seen;
+    for (const auto& s : segs) {
+      if (!s.is_cutting() || s.from_cycle || !s.spindle_on || s.spindle_rpm <= 0.0 || s.feed <= 0.0) continue;
+      if (std::min(s.start.z, s.end.z) >= 0.0) continue;  // in the air above the stock
+      // plunges and ramps steeper than 45 degrees are fed slower on purpose
+      const double dz = std::abs(s.end.z - s.start.z);
+      if (dz > 0.0 && dz >= std::hypot(s.end.x - s.start.x, s.end.y - s.start.y)) continue;
+      auto tool = m.tools.find(s.tool);
+      if (tool == m.tools.end() || tool->second.flutes == 0) continue;
+      if (!seen.insert({s.tool, std::lround(s.spindle_rpm), std::lround(s.feed)}).second) continue;
+      // chip load grows with diameter, but levels off for big cutters
+      // (face mills run about what a 16 mm end mill does)
+      const double d = std::min(tool->second.diameter_mm, 16.0);
+      const double fz = s.feed / (s.spindle_rpm * tool->second.flutes);
+      const double lo = mat->fz_min_per_d * d, hi = mat->fz_max_per_d * d;
+      char buf[200];
+      std::snprintf(buf, sizeof buf, "%.4f mm/tooth at F%ld S%ld (T%d, %d flutes)", fz, std::lround(s.feed),
+                    std::lround(s.spindle_rpm), s.tool, tool->second.flutes);
+      char usual[80];
+      std::snprintf(usual, sizeof usual, "usual is about %.3f-%.3f mm/tooth in %s", lo, hi, mat->label.c_str());
+      if (fz > hi * 1.3) {
+        out.push_back(make(Severity::Warning, code(), s, std::string(buf) + " is a heavy chip load; " + usual));
+      } else if (fz < lo * 0.5) {
+        out.push_back(make(Severity::Warning, code(), s,
+                           std::string(buf) + " is so light the tool may rub instead of cut; " + usual));
+      }
+    }
+  }
+};
+
 }  // namespace
 
 std::vector<std::unique_ptr<Rule>> make_default_rules() {
@@ -231,6 +320,8 @@ std::vector<std::unique_ptr<Rule>> make_default_rules() {
   rules.push_back(std::make_unique<FeedAboveLimit>());
   rules.push_back(std::make_unique<NoToolLoaded>());
   rules.push_back(std::make_unique<DeepPlunge>());
+  rules.push_back(std::make_unique<SurfaceSpeed>());
+  rules.push_back(std::make_unique<ChipLoad>());
   return rules;
 }
 

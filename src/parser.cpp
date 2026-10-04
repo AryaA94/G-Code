@@ -126,13 +126,8 @@ bool is_unsupported_g(int tenths) {
     case 420:
     case 930:
     case 950:
-    case 730:
-    case 840:
-    case 850:
-    case 860:
     case 870:
     case 880:
-    case 890:
     case 382:
     case 383:
     case 384:

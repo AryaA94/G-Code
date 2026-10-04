@@ -48,7 +48,7 @@ page.on('console', m => {
 });
 await page.goto('file://' + page_path);
 await page.waitForFunction(() => document.querySelectorAll('#rules dt').length > 0, null, { timeout: 20000 });
-check((await page.locator('#rules dt').count()) === 9, 'page lists nine lint rules');
+check((await page.locator('#rules dt').count()) === 11, 'page lists eleven lint rules');
 
 // real machines are offered; the CLI comparison below uses examples/machine.json
 const machines = await page.evaluate(() => [...document.querySelectorAll('#machineSelect option')].map(o => o.value));
@@ -132,6 +132,35 @@ check(Math.abs(zmin + 3.175) < 1e-6, `inch program: Z-0.125 in reads as ${zmin} 
 const fb = new URL(await page.evaluate(() => feedbackUrl()));
 const body = fb.searchParams.get('body');
 check(fb.pathname.endsWith('/issues/new') && body.includes('O01002') && body.includes('Haas VF-2'), 'feedback link includes the program and machine');
+
+// plate example: picks the VF-5/50, matches the CLI, and the material check fires on AR500
+await page.click('[data-key=plate_drill_tap]');
+check(await page.inputValue('#machineSelect') === 'haas_vf5_50', 'plate example selects the Haas VF-5/50');
+check(await page.inputValue('#stockSelect') === 'alloy_steel', 'VF-5/50 preset sets the stock material');
+const plateNative = JSON.parse(execFileSync(cli, ['lint', `${root}/examples/plate_drill_tap.nc`, '-c', `${root}/examples/machines/haas_vf5_50.json`, '--format', 'json']));
+check(await page.evaluate(n => JSON.stringify(result.lint) === n, JSON.stringify(plateNative)), 'plate example: diagnostics match CLI');
+await page.selectOption('#stockSelect', 'ar500');
+await page.waitForFunction(() => result.lint.diagnostics.some(d => d.code === 'LN010'));
+check(true, 'AR500 flags spindle speeds that are too fast (LN010)');
+
+// every material in the page is one the engine knows
+const badMaterials = await page.evaluate(() => MATERIALS.filter(([k]) => {
+  const r = JSON.parse(engine.analyze('G0 X0', JSON.stringify({ stock_material: k })));
+  return !r.ok;
+}).map(([k]) => k));
+check(badMaterials.length === 0, `all page materials accepted by the engine${badMaterials.length ? ': ' + badMaterials : ''}`);
+
+// feedback asks first and warns that issues are public; email hidden until configured
+await page.click('#feedbackBtn');
+check(await page.evaluate(() => document.getElementById('feedbackDialog').open), 'feedback opens a dialog first');
+check(/public/i.test(await page.textContent('.fb-warn')), 'dialog warns that issues are public');
+check(await page.evaluate(() => document.getElementById('fbEmail').hidden === !FEEDBACK_EMAIL), 'email option shown only when an address is set');
+const plain = new URL(await page.evaluate(() => feedbackUrl(false)));
+check(!plain.searchParams.get('body').includes('G84'), 'feedback without program leaves the program out');
+await page.click('#feedbackDialog [value=cancel]');
+
+// offline button is hidden when the page is already a local file
+check(await page.evaluate(() => document.getElementById('offlineBtn').hidden), 'offline download hidden for a local file');
 
 check(errors.length === 0, `no page errors${errors.length ? ': ' + errors.join('; ') : ''}`);
 await browser.close();

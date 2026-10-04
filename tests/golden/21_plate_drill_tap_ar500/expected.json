@@ -1,0 +1,78 @@
+{
+  "lint": {
+    "diagnostics": [
+      {
+        "code": "LN010",
+        "column": 1,
+        "line": 15,
+        "message": "S900 is 141 m/min, too fast for carbide T5 (50.000 mm) in Abrasion-resistant plate, ~500 BHN (AR500); usual is about 223-446 rpm",
+        "severity": "warning"
+      },
+      {
+        "code": "LN010",
+        "column": 1,
+        "line": 53,
+        "message": "S2800 is 90 m/min, too fast for carbide T3 (10.200 mm) in Abrasion-resistant plate, ~500 BHN (AR500); usual is about 1092-2184 rpm",
+        "severity": "warning"
+      }
+    ],
+    "errors": 0,
+    "warnings": 2
+  },
+  "stats": {
+    "all_bounds": {
+      "max": [
+        300.0,
+        60.0,
+        381.0
+      ],
+      "min": [
+        -35.0,
+        0.0,
+        -29.0
+      ]
+    },
+    "cut_bounds": {
+      "max": [
+        235.0,
+        60.0,
+        5.0
+      ],
+      "min": [
+        -35.0,
+        10.0,
+        -29.0
+      ]
+    },
+    "feed_mm_min": {
+      "max": 525.0,
+      "min": 160.0
+    },
+    "length_mm": {
+      "cutting": 1096.72,
+      "rapid": 4486.94
+    },
+    "lines": 82,
+    "max_spindle_rpm": 2800.0,
+    "moves": {
+      "arc": 0,
+      "dwells": 0,
+      "linear": 82,
+      "pauses": 0,
+      "rapid": 125,
+      "tool_changes": 4
+    },
+    "time_s": {
+      "cutting": 150.883,
+      "other": 18.0,
+      "rapid": 21.9982,
+      "total": 190.881
+    },
+    "tools": [
+      5,
+      2,
+      3,
+      4
+    ]
+  }
+}

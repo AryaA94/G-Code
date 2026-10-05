@@ -155,6 +155,18 @@ state, diagnostics, the move list) runs at about 2.4M lines/s, the same speed
 as the bare-bones tokenizer in [bench/bench_parse.cpp](bench/bench_parse.cpp)
 that does none of that. Run `build/bench_parse` for your machine's numbers.
 
+## Drilling program generator and job quote
+
+On the web page, **Generate a drilling program** turns a hole list (pasted
+from a spreadsheet, or built from grid and bolt-circle patterns) into a
+complete program: spot drill, drill (G81, G73 or G83 by depth) and
+optionally tap (G84), with speeds and feeds picked for the stock material,
+holes ordered to cut travel, and the tools added to the machine config. The
+result runs through the same checks and timing as any other program.
+
+**Job quote** turns the cycle time into cost: shop rate, setup, load/unload
+and quantity give cost per part and per batch (machine time only).
+
 ## Machines and real CAM output
 
 `examples/machines/` has configs for a Haas VF-2, Haas Mini Mill, DMG MORI

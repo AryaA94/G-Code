@@ -215,6 +215,30 @@ dialog#feedbackDialog h2{ margin:0 0 10px; font-size:18px; }
 .fb-warn{ background:rgba(255,157,46,.1); border:1px solid rgba(255,157,46,.4); border-radius:8px; padding:10px 12px;
   font-size:13.5px; line-height:1.5; margin:0 0 14px; }
 .fb-options{ display:flex; flex-direction:column; gap:8px; }
+.gen{ margin-bottom:16px; }
+.gen > summary{ cursor:pointer; list-style:none; display:flex; flex-wrap:wrap; gap:4px 12px; align-items:baseline; }
+.gen > summary::-webkit-details-marker{ display:none; }
+.gen > summary::before{ content:"▸"; color:var(--accent); }
+.gen[open] > summary::before{ content:"▾"; }
+.gen-title{ font-weight:600; font-size:15px; }
+.gen-grid{ display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-top:14px; }
+@media (max-width: 860px){ .gen-grid{ grid-template-columns:1fr; } }
+.gen-col{ min-width:0; display:flex; flex-direction:column; gap:8px; }
+.gen-label{ font-size:11.5px; color:var(--muted); }
+.gen-holes{ height:150px; }
+.gen-add{ display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+.gen-pattern, .gen-fields, .quote-inputs{ display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:8px; align-items:end; }
+.gen-pattern label, .gen-fields label, .quote-inputs label{ display:flex; flex-direction:column; gap:4px; font-size:11.5px; color:var(--muted); }
+.quote-inputs{ margin-bottom:10px; }
+.gen-note{ font-size:12px; color:var(--muted); margin:6px 0 0; line-height:1.45; }
+.gen-warn{ font-size:12.5px; margin:0; padding:8px 10px; border-radius:6px; background:rgba(255,157,46,.1); border:1px solid rgba(255,157,46,.4); }
+.gen-actions{ display:flex; gap:10px; align-items:center; }
+.fb-options .btn{ text-align:center; text-decoration:none; }
+.fb-fallback{ margin-top:12px; font-size:12.5px; color:var(--muted); }
+.fb-fallback p{ margin:0 0 6px; }
+.fb-copy{ display:flex; gap:6px; }
+.fb-copy input{ flex:1; min-width:0; background:#0e1217; color:#e7eaee; border:1px solid var(--line-2); border-radius:6px;
+  padding:5px 8px; font:12px var(--mono); }
 .fb-foot{ margin:14px 0 0; font-size:12.5px; color:var(--muted); }
 .linkish{ background:none; border:0; color:var(--accent); cursor:pointer; font:inherit; padding:0; margin-left:6px; }
 .machine-note{ margin:8px 0 0; font-size:12px; line-height:1.45; color:var(--muted, #8a93a0); }
@@ -253,6 +277,55 @@ dialog#feedbackDialog h2{ margin:0 0 10px; font-size:18px; }
 
   <p class="section-label">Examples, or try your own</p>
   <div class="presets" id="presets"></div>
+
+  <details class="panel gen" id="genPanel">
+    <summary><span class="gen-title">Generate a drilling program</span>
+      <span class="meta">from a hole list: spot, drill and tap, with speeds and feeds for the material</span></summary>
+    <div class="gen-grid">
+      <div class="gen-col">
+        <label class="gen-label" for="genHoles">Hole positions, X Y in mm from the plate's lower-left corner (one per line; paste from a spreadsheet)</label>
+        <textarea class="json gen-holes" id="genHoles" spellcheck="false" placeholder="25, 20&#10;100, 20&#10;175, 20"></textarea>
+        <div class="gen-add">
+          <span class="gen-label">Add a pattern:</span>
+          <button type="button" class="btn secondary small" id="genGridBtn">Grid</button>
+          <button type="button" class="btn secondary small" id="genCircleBtn">Bolt circle</button>
+          <button type="button" class="btn secondary small" id="genClearBtn">Clear</button>
+        </div>
+        <div class="gen-pattern" id="genGrid" hidden>
+          <label>X start<input type="number" id="gx0" value="25"></label>
+          <label>Y start<input type="number" id="gy0" value="25"></label>
+          <label>Columns<input type="number" id="gnx" value="4" min="1"></label>
+          <label>Rows<input type="number" id="gny" value="3" min="1"></label>
+          <label>X pitch<input type="number" id="gdx" value="50"></label>
+          <label>Y pitch<input type="number" id="gdy" value="40"></label>
+          <button type="button" class="btn small" id="genGridAdd">Add grid</button>
+        </div>
+        <div class="gen-pattern" id="genCircle" hidden>
+          <label>Center X<input type="number" id="ccx" value="150"></label>
+          <label>Center Y<input type="number" id="ccy" value="100"></label>
+          <label>Bolt circle dia.<input type="number" id="cdia" value="120"></label>
+          <label>Holes<input type="number" id="cn" value="6" min="1"></label>
+          <label>Start angle °<input type="number" id="ca0" value="0"></label>
+          <button type="button" class="btn small" id="genCircleAdd">Add circle</button>
+        </div>
+      </div>
+      <div class="gen-col">
+        <div class="gen-fields">
+          <label>Hole<select id="genHole"></select></label>
+          <label>Plate thickness, mm<input type="number" id="genThick" value="25" min="0.5" step="0.5"></label>
+          <label>Spot drill first<select id="genSpot"><option value="1">Yes</option><option value="0">No</option></select></label>
+          <label>Hole order<select id="genOrder"><option value="near">Shortest path</option><option value="list">As listed</option></select></label>
+        </div>
+        <p class="gen-note">Material and machine come from the panels below. The program uses tools T21 (spot drill), T22 (drill)
+          and T23 (tap), which are added to the machine config.</p>
+        <p class="gen-warn" id="genWarn" hidden></p>
+        <div class="gen-actions">
+          <button type="button" class="btn" id="genBtn">Generate program</button>
+          <span class="meta" id="genCount"></span>
+        </div>
+      </div>
+    </div>
+  </details>
 
   <div class="workspace">
     <div class="side-col">
@@ -341,11 +414,27 @@ dialog#feedbackDialog h2{ margin:0 0 10px; font-size:18px; }
         <div class="panel-head">
           <h2>Summary</h2>
           <div class="toolbar">
+            <button class="btn secondary small" id="ncBtn">Download program</button>
             <button class="btn secondary small" id="svgBtn">Download SVG</button>
             <button class="btn secondary small" id="jsonBtn">Download JSON</button>
           </div>
         </div>
         <div class="stat-grid" id="stats"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>Job quote</h2>
+          <span class="meta">machine time for this program, as cost</span>
+        </div>
+        <div class="quote-inputs">
+          <label>Shop rate, $/hour<input type="number" id="qRate" value="120" min="0" step="5"></label>
+          <label>Setup, minutes<input type="number" id="qSetup" value="30" min="0" step="5"></label>
+          <label>Load and unload, min/part<input type="number" id="qLoad" value="3" min="0" step="0.5"></label>
+          <label>Quantity<input type="number" id="qQty" value="10" min="1" step="1"></label>
+        </div>
+        <div class="stat-grid" id="quote"></div>
+        <p class="gen-note">Machine time only: material, tooling, deburring and margin are not included.</p>
       </section>
 
       <section class="panel">
@@ -374,12 +463,16 @@ dialog#feedbackDialog h2{ margin:0 0 10px; font-size:18px; }
     <p class="fb-warn"><b>GitHub issues are public.</b> Anyone on the internet can read them. Don't include programs
       for customer parts or anything your company treats as confidential.</p>
     <div class="fb-options">
-      <button class="btn small" value="public-program">Public issue, include my program</button>
-      <button class="btn secondary small" value="public-plain">Public issue, without the program</button>
-      <button class="btn secondary small" id="fbEmail" value="email">Private email instead</button>
+      <a class="btn small" id="fbWith" data-choice="public-program" target="_blank" rel="noopener" href="#">Public issue, include my program</a>
+      <a class="btn secondary small" id="fbPlain" data-choice="public-plain" target="_blank" rel="noopener" href="#">Public issue, without the program</a>
+      <a class="btn secondary small" id="fbEmail" data-choice="email" target="_blank" rel="noopener" href="#">Private email instead</a>
+    </div>
+    <div class="fb-fallback" id="fbFallback" hidden>
+      <p>Nothing opened? Your browser or this viewer may block new tabs. Copy the link and open it yourself:</p>
+      <div class="fb-copy"><input id="fbLink" readonly aria-label="feedback link"><button type="button" class="btn secondary small" id="fbCopy">Copy</button></div>
     </div>
     <p class="fb-foot">Your program never leaves your computer unless you choose an option above.
-      <button class="linkish" value="cancel">Cancel</button></p>
+      <button class="linkish" value="cancel">Close</button></p>
   </form>
 </dialog>
 

@@ -8,6 +8,11 @@
 
 const $ = id => document.getElementById(id);
 
+// The page as it arrived, before any of the code below changes it: the
+// fallback for "Download for offline use" when the page can't refetch itself.
+// The <script> holding this code (and the engine) is already in the document.
+const PAGE_SOURCE = '<!doctype html>\n' + document.documentElement.outerHTML;
+
 const PRESETS = [
   { key: 'bracket',     tag: 'PROFILE + BORE', title: 'Bracket: outline, helical bore, two holes' },
   { key: 'pocket',      tag: 'POCKET',         title: 'Rectangular pocket, two depths' },
@@ -16,6 +21,7 @@ const PRESETS = [
   { key: 'drill_plate', tag: 'PECK DRILL',     title: '12 holes with G83 pecking' },
   { key: 'lint_demo',   tag: 'LINT',           title: 'A program full of mistakes' },
   { key: 'plate_drill_tap', tag: 'PLATE',       title: 'Face, drill and tap 4140 plate', machine: 'haas_vf5_50' },
+  { key: 'fsae_upright', tag: 'FSAE',          title: 'Upright plate in 7075: helical bearing bore', machine: 'haas_mini_mill', stock: 'aluminum_7075' },
 ];
 
 // Must match src/materials.cpp (the browser test checks every key is accepted).
@@ -138,6 +144,7 @@ function run({ refit = false } = {}) {
   if (refit) fitView();
   if (wasAtEnd || play.t > scene.total) play.t = scene.total;
   renderStats(r);
+  renderQuote();
   renderDiagnostics(r);
   renderGutter();
   renderSpeedChart(r);
@@ -149,6 +156,205 @@ function showError(msg) {
   const b = $('errorBanner');
   b.textContent = msg;
   b.classList.toggle('show', !!msg);
+}
+
+// ---- drilling program generator -------------------------------------------
+
+// Starting points for carbide drills and HSS taps, per stock material:
+// drill surface speed (m/min), feed per rev as a fraction of the drill
+// diameter, peck depth in drill diameters, tap surface speed (m/min, null =
+// too hard to tap, thread mill instead). Handbook-style values; the drill
+// speeds sit inside the LN010 ranges in src/materials.cpp.
+const GEN_DATA = {
+  aluminum_6061:    { vc: 150, fr: 0.025, peck: 1.5, tapVc: 20 },
+  aluminum_7075:    { vc: 130, fr: 0.022, peck: 1.5, tapVc: 18 },
+  mild_steel:       { vc: 100, fr: 0.018, peck: 1.0, tapVc: 12 },
+  alloy_steel:      { vc: 80,  fr: 0.015, peck: 1.0, tapVc: 8 },
+  ar400:            { vc: 50,  fr: 0.010, peck: 0.5, tapVc: null },
+  ar500:            { vc: 40,  fr: 0.008, peck: 0.5, tapVc: null },
+  hardened_600:     { vc: 28,  fr: 0.006, peck: 0.4, tapVc: null },
+  stainless_304:    { vc: 70,  fr: 0.012, peck: 0.75, tapVc: 6 },
+  titanium_ti6al4v: { vc: 45,  fr: 0.010, peck: 0.75, tapVc: 5 },
+};
+const GEN_MAX_RPM = 8000;  // a safe ceiling for 40- and 50-taper spindles
+
+// Metric coarse taps with their tap drills, then plain drilled holes.
+const GEN_HOLES = [
+  ...[['M6', 6, 1.0, 5.0], ['M8', 8, 1.25, 6.8], ['M10', 10, 1.5, 8.5], ['M12', 12, 1.75, 10.2],
+      ['M16', 16, 2.0, 14.0], ['M20', 20, 2.5, 17.5], ['M24', 24, 3.0, 21.0]]
+    .map(([name, d, pitch, drill]) => ({ key: name, label: `Tapped ${name} x ${pitch} (drill ${drill})`, drill, tap: { d, pitch } })),
+  ...[5, 6.6, 8.5, 9, 10.2, 11, 13.5, 14, 17.5, 18, 22, 26]
+    .map(d => ({ key: 'D' + d, label: `Drilled Ø${d} mm`, drill: d, tap: null })),
+];
+
+// "x, y" per line; tabs, commas, semicolons or spaces between. Lines without
+// two numbers (headers, blanks) are skipped and counted.
+function parseHoles(text) {
+  const holes = [];
+  let skipped = 0;
+  for (const line of text.split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    const nums = line.match(/-?\d+(?:[.,]\d+)?/g);
+    if (!nums || nums.length < 2) { skipped++; continue; }
+    const [x, y] = nums.slice(0, 2).map(n => parseFloat(n.replace(',', '.')));
+    if (isFinite(x) && isFinite(y)) holes.push([x, y]); else skipped++;
+  }
+  return { holes, skipped };
+}
+
+// Greedy nearest-neighbour from the origin: not optimal, but it removes the
+// long back-and-forth rapids of a list typed in any order.
+function orderHoles(holes) {
+  const left = holes.slice();
+  const out = [];
+  let at = [0, 0];
+  while (left.length) {
+    let best = 0, bestD = Infinity;
+    for (let i = 0; i < left.length; i++) {
+      const d = Math.hypot(left[i][0] - at[0], left[i][1] - at[1]);
+      if (d < bestD) { bestD = d; best = i; }
+    }
+    at = left.splice(best, 1)[0];
+    out.push(at);
+  }
+  return out;
+}
+
+const fmt = (v, d = 3) => String(+v.toFixed(d));
+
+// Builds the program text plus the tools it needs. Returns { error } when
+// the inputs can't make a sensible program.
+function buildDrillProgram({ holes, hole, thick, spot, material }) {
+  const data = GEN_DATA[material];
+  if (!data) return { error: 'Pick a stock material first (Machine panel): speeds and feeds depend on it.' };
+  if (!holes.length) return { error: 'Add at least one hole position.' };
+  if (!(thick > 0)) return { error: 'Plate thickness must be more than 0.' };
+  if (hole.tap && data.tapVc === null) {
+    return { error: 'This material is too hard to tap with a standard tap (above roughly 40 HRC). Use a drilled hole, or thread mill it.' };
+  }
+  const rpm = vc => Math.min(GEN_MAX_RPM, Math.round(vc * 1000 / (Math.PI * hole.drill) / 10) * 10);
+  const D = hole.drill;
+  const depth = thick + 0.3 * D + 1;  // drill point plus 1 mm breakthrough
+  const ratio = depth / D;
+  const cycle = ratio > 3 ? 'G83' : ratio > 1 ? 'G73' : 'G81';
+  const sDrill = rpm(data.vc), fDrill = Math.max(10, Math.round(sDrill * data.fr * D));
+  const spotD = 12;
+  const sSpot = Math.min(GEN_MAX_RPM, Math.round(data.vc * 1000 / (Math.PI * spotD) / 10) * 10);
+  const fSpot = Math.max(10, Math.round(sSpot * data.fr * spotD * 0.6));
+  const spotDepth = Math.min(spotD / 2, (Math.min(D, spotD - 0.5) + 0.5) / 2);  // 90° spot: chamfer just over the hole
+  const q = Math.max(0.5, data.peck * D);
+  const order = holes;
+
+  const L = [];
+  const op = (title, t, s, body) => {
+    L.push('', `(${title})`, `T${t} M6`, `S${s} M3`, 'G54', 'M8',
+      `G0 X${fmt(order[0][0])} Y${fmt(order[0][1])}`, `G43 Z15. H${t}`, 'G0 Z5.');
+    L.push(body + ` X${fmt(order[0][0])} Y${fmt(order[0][1])}`);
+    for (const [x, y] of order.slice(1)) L.push(`X${fmt(x)} Y${fmt(y)}`);
+    L.push('G80', 'M9', 'M5', 'G53 G0 Z0.');
+  };
+  const matLabel = (MATERIALS.find(([k]) => k === material) || [, material])[1];
+  // G-code comments end at the first ')', so labels must not contain brackets
+  const comment = t => '(' + t.replace(/[()]/g, '') + ')';
+  L.push(comment(`${order.length} x ${hole.label} through ${fmt(thick, 2)} mm ${matLabel}`),
+    '(Generated by gcode-sim. Zero: G54 at the plate lower-left corner, top face.)',
+    '(Check speeds, feeds and clamping before running.)',
+    'G21 G90 G94 G17', 'G53 G0 Z0.');
+  if (spot) op(`SPOT DRILL ${spotD} MM 90 DEG`, 21, sSpot, `G98 G81 Z-${fmt(spotDepth, 2)} R2. F${fSpot}.`);
+  op(`DRILL ${fmt(D, 2)} MM ${cycle === 'G81' ? '' : 'PECK '}THROUGH`, 22, sDrill,
+    `G98 ${cycle} Z-${fmt(depth, 2)} R2.${cycle === 'G81' ? '' : ` Q${fmt(q, 2)}`} F${fDrill}.`);
+  let tapNote = '';
+  if (hole.tap) {
+    const sTap = Math.min(GEN_MAX_RPM, Math.round(data.tapVc * 1000 / (Math.PI * hole.tap.d) / 10) * 10);
+    const fTap = +(sTap * hole.tap.pitch).toFixed(2);
+    op(`TAP ${hole.key} X ${hole.tap.pitch}`, 23, sTap,
+      `G98 G84 Z-${fmt(thick + 2 * hole.tap.pitch, 2)} R3. F${fTap}`);
+    tapNote = ` · tap S${sTap} F${fTap}`;
+  }
+  L.push('', 'M30');
+  const tools = {
+    '21': { diameter_mm: spotD, length_mm: 90, flutes: 2, material: 'carbide', comment: `${spotD} mm 90 degree spot drill (generator)` },
+    '22': { diameter_mm: D, length_mm: Math.max(80, depth + 40), flutes: 2, material: 'carbide', comment: `${D} mm carbide drill (generator)` },
+  };
+  if (hole.tap) tools['23'] = { diameter_mm: hole.tap.d, length_mm: 110, flutes: 3, material: 'hss', comment: `${hole.key} tap (generator)` };
+  const summary = `${cycle} at S${sDrill} F${fDrill}${tapNote}`;
+  return { text: L.join('\n') + '\n', tools, summary };
+}
+
+function generateProgram() {
+  const { holes: raw, skipped } = parseHoles($('genHoles').value);
+  const hole = GEN_HOLES.find(h => h.key === $('genHole').value);
+  const holes = $('genOrder').value === 'near' ? orderHoles(raw) : raw;
+  // a material is required; take the machine's if one is chosen
+  if (!$('machineSelect').value) selectMachine(machineList()[0].key);
+  const out = buildDrillProgram({
+    holes, hole, thick: parseFloat($('genThick').value), spot: $('genSpot').value === '1', material: $('stockSelect').value,
+  });
+  const warn = $('genWarn');
+  if (out.error) { warn.textContent = out.error; warn.hidden = false; return; }
+  warn.hidden = !skipped;
+  warn.textContent = skipped ? `${skipped} line${skipped === 1 ? '' : 's'} without two numbers were skipped.` : '';
+  // give the machine the generated tools so the checks know their sizes
+  try {
+    const cfg = JSON.parse($('machineJson').value);
+    cfg.tools = Object.assign({}, cfg.tools || {}, out.tools);
+    $('machineJson').value = JSON.stringify(cfg, null, 2);
+  } catch (e) { /* broken JSON: leave it for the engine to report */ }
+  try { localStorage.setItem(DRAFT_KEY, out.text); } catch (e) { /* storage blocked */ }
+  loadPreset('own');
+  $('genCount').textContent = `${holes.length} hole${holes.length === 1 ? '' : 's'} · ${out.summary}`;
+  track('generate-' + (hole.tap ? 'tap' : 'drill'));
+  document.querySelector('.workspace').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function addPattern(kind) {
+  const n = id => parseFloat($(id).value);
+  const lines = [];
+  if (kind === 'grid') {
+    const nx = Math.min(200, Math.max(1, Math.round(n('gnx')))), ny = Math.min(200, Math.max(1, Math.round(n('gny'))));
+    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) lines.push(`${fmt(n('gx0') + i * n('gdx'))}, ${fmt(n('gy0') + j * n('gdy'))}`);
+  } else {
+    const count = Math.min(360, Math.max(1, Math.round(n('cn')))), r = n('cdia') / 2;
+    for (let i = 0; i < count; i++) {
+      const a = (n('ca0') + i * 360 / count) * Math.PI / 180;
+      lines.push(`${fmt(n('ccx') + r * Math.cos(a))}, ${fmt(n('ccy') + r * Math.sin(a))}`);
+    }
+  }
+  if (lines.some(l => l.includes('NaN'))) { toast('Fill in every pattern field'); return; }
+  const ta = $('genHoles');
+  ta.value = (ta.value.trim() ? ta.value.trim() + '\n' : '') + lines.join('\n');
+  updateGenCount();
+}
+
+function updateGenCount() {
+  const { holes } = parseHoles($('genHoles').value);
+  $('genCount').textContent = holes.length ? `${holes.length} hole${holes.length === 1 ? '' : 's'}` : '';
+}
+
+// ---- job quote --------------------------------------------------------------
+
+const QUOTE_KEY = 'gcode-sim.quote';
+const money = v => '$' + (v >= 1000 ? Math.round(v).toLocaleString('en-US') : v.toFixed(2));
+
+function renderQuote() {
+  const box = $('quote');
+  if (!result) { box.innerHTML = ''; return; }
+  const num = (id, lo) => Math.max(lo, parseFloat($(id).value) || 0);
+  const rate = num('qRate', 0), setup = num('qSetup', 0), load = num('qLoad', 0), qty = Math.max(1, Math.round(num('qQty', 1)));
+  const cycleMin = result.stats.time_s.total / 60;
+  const perPartMin = cycleMin + load;
+  const batchMin = setup + perPartMin * qty;
+  const batchCost = batchMin / 60 * rate;
+  const cards = [
+    ['Cost per part', money(batchCost / qty), `at ${qty} parts, setup shared`, true],
+    ['Batch cost', money(batchCost), `${qty} parts`],
+    ['Batch machine time', fmtDuration(batchMin * 60), `${fmtDuration(setup * 60)} setup + ${qty} × ${fmtDuration(perPartMin * 60)}`],
+    ['One more part', money(perPartMin / 60 * rate), 'once set up'],
+  ];
+  box.innerHTML = cards.map(([label, value, sub, hl]) =>
+    `<div class="stat${hl ? ' highlight' : ''}"><div class="label">${esc(label)}</div><div class="value">${esc(value)}</div><div class="sub">${esc(sub)}</div></div>`
+  ).join('');
+  try { localStorage.setItem(QUOTE_KEY, JSON.stringify({ rate, setup, load, qty })); } catch (e) { /* storage blocked */ }
 }
 
 // ---- feedback and usage counts ---------------------------------------------
@@ -198,23 +404,26 @@ function feedbackMailto() {
   return `mailto:${FEEDBACK_EMAIL}?` + new URLSearchParams({ subject: 'gcode-sim feedback', body }).toString().replace(/\+/g, '%20');
 }
 
+// The choices are plain links (not window.open), which browsers and
+// embedded viewers block far less often. Their addresses are filled in when
+// the dialog opens, so they carry the current program.
 function openFeedback() {
   const dlg = $('feedbackDialog');
+  $('fbWith').href = feedbackUrl(true);
+  $('fbPlain').href = feedbackUrl(false);
   $('fbEmail').hidden = !FEEDBACK_EMAIL;
-  if (!dlg.showModal) { window.open(feedbackUrl(false), '_blank', 'noopener'); return; }
-  dlg.returnValue = 'cancel';
+  if (FEEDBACK_EMAIL) $('fbEmail').href = feedbackMailto();
+  $('fbFallback').hidden = true;
+  if (!dlg.showModal) { window.location.href = feedbackUrl(false); return; }
   dlg.showModal();
 }
 
-function onFeedbackChoice() {
-  const choice = $('feedbackDialog').returnValue;
-  if (choice === 'public-program' || choice === 'public-plain') {
-    track('feedback-' + choice);
-    window.open(feedbackUrl(choice === 'public-program'), '_blank', 'noopener');
-  } else if (choice === 'email' && FEEDBACK_EMAIL) {
-    track('feedback-email');
-    window.location.href = feedbackMailto();
-  }
+function onFeedbackLink(e) {
+  const a = e.currentTarget;
+  track('feedback-' + a.dataset.choice);
+  // If the viewer swallows the new tab, the link stays available to copy.
+  $('fbLink').value = a.href;
+  setTimeout(() => { $('fbFallback').hidden = false; }, 600);
 }
 
 // Save the whole tool as one HTML file that runs without internet. The page
@@ -225,11 +434,8 @@ async function downloadOffline() {
   try {
     const r = await fetch(location.href, { cache: 'force-cache' });
     if (r.ok) html = await r.text();
-  } catch (e) { /* not fetchable here */ }
-  if (!html || !html.includes('GcodeSimModule')) {
-    toast('Could not read the page here. Download web/dist/gcode-sim-web.html from GitHub instead.');
-    return;
-  }
+  } catch (e) { /* not fetchable here, e.g. inside an embedded viewer */ }
+  if (!html || !html.includes('GcodeSimModule')) html = PAGE_SOURCE;
   download('gcode-sim.html', html, 'text/html');
 }
 
@@ -277,6 +483,7 @@ function buildPresets() {
     b.textContent = p.title;
     b.addEventListener('click', () => {
       if (p.machine && $('machineSelect').value !== p.machine) selectMachine(p.machine);
+      if (p.stock) $('stockSelect').value = p.stock;
       loadPreset(p.key);
       track('example-' + p.key);
     });
@@ -867,6 +1074,8 @@ async function download(name, text, type) {
     try {
       await saver.save({ filename: name, data: new Blob([text], { type }) });
     } catch (e) {
+      // some viewers only accept common extensions (.nc isn't one): save as .txt
+      if (e && e.code === 'rejected_extension' && !name.endsWith('.txt')) return download(name.replace(/\.[^.]+$/, '') + '.txt', text, 'text/plain');
       if (e && e.code !== 'declined') toast('Could not save ' + name + (e.message ? ': ' + e.message : ''));
     }
     return;
@@ -936,7 +1145,12 @@ function wire() {
   for (const id of ['feedbackBtn', 'reportLink']) {
     $(id).addEventListener('click', e => { e.preventDefault(); openFeedback(); });
   }
-  $('feedbackDialog').addEventListener('close', onFeedbackChoice);
+  for (const id of ['fbWith', 'fbPlain', 'fbEmail']) $(id).addEventListener('click', onFeedbackLink);
+  $('fbCopy').addEventListener('click', async () => {
+    $('fbLink').select();
+    try { await navigator.clipboard.writeText($('fbLink').value); toast('Link copied'); }
+    catch (e) { try { document.execCommand('copy'); toast('Link copied'); } catch (e2) { toast('Select the link and copy it'); } }
+  });
   // Already a local file: nothing to download.
   if (location.protocol === 'file:') $('offlineBtn').hidden = true;
   $('offlineBtn').addEventListener('click', e => { e.preventDefault(); downloadOffline(); });
@@ -956,6 +1170,23 @@ function wire() {
     updateTime();
   });
   $('speed').addEventListener('change', () => { play.mode = $('speed').value; play.last = performance.now(); });
+
+  // generator and quote
+  for (const h of GEN_HOLES) $('genHole').add(new Option(h.label, h.key));
+  $('genHole').value = 'M12';
+  $('genGridBtn').addEventListener('click', () => { $('genGrid').hidden = !$('genGrid').hidden; $('genCircle').hidden = true; });
+  $('genCircleBtn').addEventListener('click', () => { $('genCircle').hidden = !$('genCircle').hidden; $('genGrid').hidden = true; });
+  $('genGridAdd').addEventListener('click', () => addPattern('grid'));
+  $('genCircleAdd').addEventListener('click', () => addPattern('circle'));
+  $('genClearBtn').addEventListener('click', () => { $('genHoles').value = ''; updateGenCount(); });
+  $('genHoles').addEventListener('input', updateGenCount);
+  $('genBtn').addEventListener('click', generateProgram);
+  try {
+    const q = JSON.parse(localStorage.getItem(QUOTE_KEY) || 'null');
+    if (q) { $('qRate').value = q.rate; $('qSetup').value = q.setup; $('qLoad').value = q.load; $('qQty').value = q.qty; }
+  } catch (e) { /* storage blocked */ }
+  for (const id of ['qRate', 'qSetup', 'qLoad', 'qQty']) $(id).addEventListener('input', renderQuote);
+  $('ncBtn').addEventListener('click', () => { download('program.nc', code.value, 'text/plain'); track('download-program'); });
 
   $('svgBtn').addEventListener('click', () => {
     if (!engine) return;

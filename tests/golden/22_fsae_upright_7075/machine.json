@@ -1,0 +1,66 @@
+{
+  "name": "Haas Mini Mill (compact VMC)",
+  "comment": "Small-footprint VMC used in schools and prototype shops. Figures are approximate, based on published specs; acceleration is an estimate.",
+  "max_rate_mm_min": {
+    "x": 15200,
+    "y": 15200,
+    "z": 15200
+  },
+  "accel_mm_s2": {
+    "x": 3000,
+    "y": 3000,
+    "z": 2500
+  },
+  "max_feed_mm_min": 12700,
+  "junction_deviation_mm": 0.01,
+  "tool_change_time_s": 4.5,
+  "travel_mm": {
+    "x": [
+      -203.0,
+      203.0
+    ],
+    "y": [
+      -152.5,
+      152.5
+    ],
+    "z": [
+      -254,
+      0
+    ]
+  },
+  "work_offsets": {
+    "G54": {
+      "x": 0,
+      "y": 0,
+      "z": -152
+    },
+    "G55": {
+      "x": 120,
+      "y": 0,
+      "z": -152
+    }
+  },
+  "tools": {
+    "1": {
+      "diameter_mm": 6,
+      "length_mm": 50,
+      "comment": "6 mm flat end mill"
+    },
+    "2": {
+      "diameter_mm": 5,
+      "length_mm": 70,
+      "comment": "5 mm jobber drill"
+    },
+    "3": {
+      "diameter_mm": 3,
+      "length_mm": 45,
+      "comment": "3 mm ball end mill"
+    },
+    "4": {
+      "diameter_mm": 1,
+      "length_mm": 40,
+      "comment": "60 degree engraver, 1 mm tip"
+    }
+  },
+  "stock_material": "aluminum_7075"
+}

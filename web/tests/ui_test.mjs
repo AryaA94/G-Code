@@ -102,7 +102,7 @@ const rates = await page.evaluate(() => {
 check(rates.atToolChange <= 0.41, `a tool change plays in ${rates.atToolChange.toFixed(2)} s`);
 
 // a broken machine config shows an error instead of crashing
-await page.evaluate(() => { document.querySelector('details').open = true; });
+await page.evaluate(() => { document.getElementById('machineJson').closest('details').open = true; });
 await page.fill('#machineJson', '{ "max_rate_mm_min": 5 }');
 await page.click('#runBtn');
 check(/Machine config/.test(await page.textContent('#errorBanner')), 'bad machine.json shows an error banner');
@@ -155,12 +155,55 @@ await page.click('#feedbackBtn');
 check(await page.evaluate(() => document.getElementById('feedbackDialog').open), 'feedback opens a dialog first');
 check(/public/i.test(await page.textContent('.fb-warn')), 'dialog warns that issues are public');
 check(await page.evaluate(() => document.getElementById('fbEmail').hidden === !FEEDBACK_EMAIL), 'email option shown only when an address is set');
-const plain = new URL(await page.evaluate(() => feedbackUrl(false)));
-check(!plain.searchParams.get('body').includes('G84'), 'feedback without program leaves the program out');
+const plainHref = await page.getAttribute('#fbPlain', 'href');
+const withHref = await page.getAttribute('#fbWith', 'href');
+check(plainHref.includes('/issues/new') && withHref.includes('/issues/new'), 'feedback choices are real links to a new issue');
+check(!new URL(plainHref).searchParams.get('body').includes('G84') && new URL(withHref).searchParams.get('body').includes('G84'),
+  'only the "include my program" link carries the program');
 await page.click('#feedbackDialog [value=cancel]');
 
 // offline button is hidden when the page is already a local file
 check(await page.evaluate(() => document.getElementById('offlineBtn').hidden), 'offline download hidden for a local file');
+
+// drilling program generator: grid of tapped holes in 4140 on the VF-5/50
+await page.selectOption('#machineSelect', 'haas_vf5_50');
+await page.selectOption('#stockSelect', 'alloy_steel');
+await page.evaluate(() => { document.getElementById('genPanel').open = true; });
+await page.click('#genClearBtn');
+await page.click('#genGridBtn');
+await page.fill('#gnx', '3'); await page.fill('#gny', '2');
+await page.click('#genGridAdd');
+check((await page.inputValue('#genHoles')).trim().split('\n').length === 6, 'grid adds 6 holes');
+await page.selectOption('#genHole', 'M12');
+await page.fill('#genThick', '25');
+await page.click('#genBtn');
+await page.waitForFunction(() => document.getElementById('code').value.includes('G84'));
+const gen = await page.evaluate(() => ({ code: document.getElementById('code').value, lint: result.lint, cfg: JSON.parse(machineConfig()) }));
+check(/G7[3]|G83/.test(gen.code) && gen.code.includes('T21 M6') && gen.code.includes('T23 M6'), 'generated program spots, peck drills and taps');
+check(gen.lint.errors === 0 && gen.lint.warnings === 0, `generated program is clean (${gen.lint.errors} errors, ${gen.lint.warnings} warnings)`);
+check(gen.cfg.tools['22'].diameter_mm === 10.2 && gen.cfg.tools['23'].material === 'hss', 'generator adds its tools to the machine');
+// same program and machine through the native CLI
+const fsMod = await import('node:fs');
+const tmpNc = resolve(here, '_gen.nc'), tmpJson = resolve(here, '_gen.json');
+fsMod.writeFileSync(tmpNc, gen.code); fsMod.writeFileSync(tmpJson, JSON.stringify(gen.cfg));
+let genNative; try { genNative = JSON.parse(execFileSync(cli, ['lint', tmpNc, '-c', tmpJson, '--format', 'json'])); } catch (e) { genNative = JSON.parse(e.stdout); }
+fsMod.unlinkSync(tmpNc); fsMod.unlinkSync(tmpJson);
+check(JSON.stringify(genNative) === JSON.stringify(gen.lint), 'generated program: page and CLI agree');
+
+// too hard to tap: AR500 refuses with a reason
+await page.selectOption('#stockSelect', 'ar500');
+await page.click('#genBtn');
+check(/too hard to tap/.test(await page.textContent('#genWarn')), 'AR500 + tapped hole explains it can\'t be tapped');
+await page.selectOption('#genHole', 'D17.5');
+await page.click('#genBtn');
+await page.waitForFunction(() => document.getElementById('code').value.includes('17.5 MM'));
+check(await page.evaluate(() => result.lint.errors === 0 && result.lint.warnings === 0), 'AR500 drilled holes: clean program');
+
+// quote: cost follows the cycle time and the inputs
+await page.fill('#qRate', '120'); await page.fill('#qSetup', '30'); await page.fill('#qLoad', '0'); await page.fill('#qQty', '1');
+const q = await page.evaluate(() => ({ total: result.stats.time_s.total, text: document.getElementById('quote').textContent }));
+const expect = ((30 + q.total / 60) / 60 * 120).toFixed(2);
+check(q.text.includes('$' + expect), `quote: 1 part = $${expect}`);
 
 check(errors.length === 0, `no page errors${errors.length ? ': ' + errors.join('; ') : ''}`);
 await browser.close();

@@ -166,6 +166,7 @@ json toolpath_json(const Analysis& a) {
                      {"line", s.line},
                      {"feed", round_sig(s.feed)},
                      {"tool", s.tool},
+                     {"rpm", s.spindle_on ? round_sig(s.spindle_rpm) : 0.0},
                      {"t0", round_sig(a.plan.segment_start_s[i])},
                      {"dt", round_sig(a.plan.segment_time_s[i])},
                      {"points", pts}});

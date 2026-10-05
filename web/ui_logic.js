@@ -144,7 +144,10 @@ function run({ refit = false } = {}) {
   if (refit) fitView();
   if (wasAtEnd || play.t > scene.total) play.t = scene.total;
   renderStats(r);
+  renderOperations();
+  renderToolCost();
   renderQuote();
+  renderCompare();
   renderDiagnostics(r);
   renderGutter();
   renderSpeedChart(r);
@@ -348,17 +351,387 @@ function renderQuote() {
   const cycleMin = result.stats.time_s.total / 60;
   const perPartMin = cycleMin + load;
   const batchMin = setup + perPartMin * qty;
-  const batchCost = batchMin / 60 * rate;
+  const tooling = toolingPerPart();
+  const batchCost = batchMin / 60 * rate + tooling * qty;
   const cards = [
-    ['Cost per part', money(batchCost / qty), `at ${qty} parts, setup shared`, true],
+    ['Cost per part', money(batchCost / qty), `at ${qty} parts, setup shared${tooling ? ', tool wear included' : ''}`, true],
     ['Batch cost', money(batchCost), `${qty} parts`],
     ['Batch machine time', fmtDuration(batchMin * 60), `${fmtDuration(setup * 60)} setup + ${qty} × ${fmtDuration(perPartMin * 60)}`],
-    ['One more part', money(perPartMin / 60 * rate), 'once set up'],
+    ['One more part', money(perPartMin / 60 * rate + tooling), 'once set up'],
   ];
+  if (tooling) cards.push(['Tool wear per part', money(tooling), 'from the tool cost table']);
+  $('quoteNote').textContent = tooling
+    ? 'Machine time and tool wear. Material, deburring and margin are not included.'
+    : 'Machine time only: material, tooling, deburring and margin are not included.';
   box.innerHTML = cards.map(([label, value, sub, hl]) =>
     `<div class="stat${hl ? ' highlight' : ''}"><div class="label">${esc(label)}</div><div class="value">${esc(value)}</div><div class="sub">${esc(sub)}</div></div>`
   ).join('');
   try { localStorage.setItem(QUOTE_KEY, JSON.stringify({ rate, setup, load, qty })); } catch (e) { /* storage blocked */ }
+}
+
+// ---- operations: the program split at tool changes and comment headings ----
+
+// A comment-only line ("(2D CONTOUR1)", "N40 (DRILL)") names what follows it.
+function headingAt(lines, i) {
+  const m = /^\s*(?:N\d+\s*)?\(([^()]*)\)\s*$/.exec(lines[i] || '');
+  return m ? m[1].trim() : null;
+}
+
+function programTitle(code) {
+  const lines = code.split('\n');
+  for (let i = 0; i < Math.min(lines.length, 15); i++) {
+    const h = headingAt(lines, i);
+    if (h) return h;
+  }
+  return 'Untitled program';
+}
+
+// One entry per operation: a new one starts at every tool change and at
+// every comment heading between moves. Leading rapid-only stretches (moving
+// home, retracts) fold into the operation after them.
+function computeOperations(r, code) {
+  const lines = code.split('\n');
+  const headings = [];
+  for (let i = 0; i < lines.length; i++) if (headingAt(lines, i)) headings.push(i + 1);
+  const ops = [];
+  let op = null, prevLine = 0, hIdx = 0;
+  // line: the heading comment when there is one, else the first move
+  const start = (name, m, line) => {
+    op = { name, tool: m.tool, line: line || m.line, t0: m.t0, cut: 0, rapid: 0, other: 0, total: 0,
+      rpm: [Infinity, 0], feed: [Infinity, 0], zmin: Infinity, cutLen: 0, hasCut: false };
+    ops.push(op);
+  };
+  for (const m of r.toolpath.moves) {
+    let heading = null, headingLine = 0;
+    while (hIdx < headings.length && headings[hIdx] < m.line) {
+      if (headings[hIdx] > prevLine) { heading = headingAt(lines, headings[hIdx] - 1); headingLine = headings[hIdx]; }
+      hIdx++;
+    }
+    const toolChanged = op && (m.type === 'tool_change' || m.tool !== op.tool);
+    if (!op) {
+      start(heading || `T${m.tool || '?'}`, m, headingLine);
+    } else if (heading || toolChanged) {
+      if (!op.hasCut && op.other < 1e-9) {
+        // the current one only moved around: let it become the new operation
+        if (heading) { op.name = heading; op.line = headingLine; }
+        else if (/^T(\d+|\?)$/.test(op.name)) op.name = `T${m.tool || '?'}`;
+        op.tool = m.tool;
+      } else {
+        start(heading || `T${m.tool || '?'}`, m, headingLine);
+      }
+    }
+    prevLine = m.line;
+    if (m.type === 'tool_change') op.tool = m.tool;
+    const cutting = m.type === 'linear' || m.type === 'arc';
+    if (cutting) {
+      op.cut += m.dt; op.hasCut = true;
+      if (m.feed > 0) { op.feed[0] = Math.min(op.feed[0], m.feed); op.feed[1] = Math.max(op.feed[1], m.feed); }
+      for (const p of m.points) op.zmin = Math.min(op.zmin, p[2]);
+      for (let i = 1; i < m.points.length; i++) {
+        const a = m.points[i - 1], b = m.points[i];
+        op.cutLen += Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+      }
+    } else if (m.type === 'rapid') op.rapid += m.dt;
+    else op.other += m.dt;
+    if (m.rpm > 0) { op.rpm[0] = Math.min(op.rpm[0], m.rpm); op.rpm[1] = Math.max(op.rpm[1], m.rpm); }
+    op.total += m.dt;
+  }
+  // a trailing rapid-only stretch (return home) joins the operation before it
+  while (ops.length > 1 && !ops[ops.length - 1].hasCut && ops[ops.length - 1].other < 1e-9) {
+    const last = ops.pop();
+    const prev = ops[ops.length - 1];
+    prev.rapid += last.rapid; prev.total += last.total;
+  }
+  return ops;
+}
+
+const range = ([lo, hi], d = 0) => !isFinite(lo) ? '–' : lo === hi ? lo.toFixed(d) : `${lo.toFixed(d)}–${hi.toFixed(d)}`;
+
+function renderOperations() {
+  const box = $('ops');
+  if (!result) { box.innerHTML = ''; return; }
+  const ops = computeOperations(result, $('code').value);
+  if (!ops.length) { box.innerHTML = '<div class="diag-empty">No moves.</div>'; return; }
+  const total = result.stats.time_s.total || 1;
+  const longest = Math.max(...ops.map(o => o.total), 1e-9);
+  box.innerHTML = `<table class="ops"><thead><tr><th>Operation</th><th>Tool</th><th>Time</th><th class="bar-cell"></th>
+    <th>Cutting</th><th>Spindle</th><th>Feed</th><th>Deepest Z</th></tr></thead><tbody>` +
+    ops.map((o, i) => `<tr class="op-row" data-i="${i}" title="Go to line ${o.line}">
+      <td class="name">${esc(o.name)}</td><td>${o.tool ? 'T' + o.tool : '–'}</td>
+      <td class="num">${fmtDuration(o.total)} <span class="meta">${Math.round(o.total / total * 100)}%</span></td>
+      <td class="bar-cell"><div class="bar" style="width:${(o.total / longest * 100).toFixed(1)}%"></div></td>
+      <td class="num">${fmtDuration(o.cut)}</td><td class="num">${range(o.rpm)}</td>
+      <td class="num">${range(o.feed)}</td><td class="num">${isFinite(o.zmin) ? o.zmin.toFixed(2) : '–'}</td></tr>`).join('') +
+    '</tbody></table>';
+  box.querySelectorAll('.op-row').forEach(tr => tr.addEventListener('click', () => {
+    const o = ops[+tr.dataset.i];
+    selectLine(o.line);
+    play.playing = false; play.t = o.t0; highlightLine = 0; updateTime();
+  }));
+}
+
+// ---- tool cost --------------------------------------------------------------
+
+const TOOLCOST_KEY = 'gcode-sim.toolcost';
+let toolCosts = {};
+try { toolCosts = JSON.parse(localStorage.getItem(TOOLCOST_KEY) || '{}') || {}; } catch (e) { toolCosts = {}; }
+
+function cutTimeByTool(r) {
+  const t = {};
+  for (const m of r.toolpath.moves) if ((m.type === 'linear' || m.type === 'arc') && m.tool) t[m.tool] = (t[m.tool] || 0) + m.dt;
+  return t;
+}
+
+function machineTools() {
+  try { return JSON.parse(machineConfig() || '{}').tools || {}; } catch (e) { return {}; }
+}
+
+function toolingPerPart() {
+  if (!result) return 0;
+  let sum = 0;
+  for (const [tool, sec] of Object.entries(cutTimeByTool(result))) {
+    const c = toolCosts[tool];
+    if (c && c.price > 0 && c.life > 0) sum += sec / 60 / c.life * c.price;
+  }
+  return sum;
+}
+
+function renderToolCost() {
+  const box = $('toolCost');
+  if (!result) { box.innerHTML = ''; return; }
+  const byTool = cutTimeByTool(result);
+  const tools = Object.keys(byTool).sort((a, b) => a - b);
+  if (!tools.length) { box.innerHTML = '<p class="gen-note">No cutting moves.</p>'; return; }
+  const desc = machineTools();
+  box.innerHTML = `<table class="ops"><thead><tr><th>Tool</th><th>Cutting / part</th><th>Price, $</th><th>Life, cutting min</th><th>Wear / part</th></tr></thead><tbody>` +
+    tools.map(t => {
+      const c = toolCosts[t] || {};
+      const per = c.price > 0 && c.life > 0 ? money(byTool[t] / 60 / c.life * c.price) : '–';
+      const name = desc[t] && desc[t].comment ? ` <span class="meta">${esc(desc[t].comment)}</span>` : '';
+      return `<tr><td class="name">T${t}${name}</td><td class="num">${fmtDuration(byTool[t])}</td>
+        <td><input type="number" min="0" step="1" data-t="${t}" data-k="price" value="${c.price ?? ''}" placeholder="e.g. 60"></td>
+        <td><input type="number" min="0" step="5" data-t="${t}" data-k="life" value="${c.life ?? ''}" placeholder="e.g. 90"></td>
+        <td class="num">${per}</td></tr>`;
+    }).join('') + '</tbody></table>';
+  // update the row in place: rebuilding the table from its own input's
+  // change event (fired on blur) would remove the input mid-event
+  box.querySelectorAll('input').forEach(inp => inp.addEventListener('input', () => {
+    const t = inp.dataset.t;
+    toolCosts[t] = Object.assign({}, toolCosts[t], { [inp.dataset.k]: parseFloat(inp.value) || 0 });
+    try { localStorage.setItem(TOOLCOST_KEY, JSON.stringify(toolCosts)); } catch (e) { /* storage blocked */ }
+    const c = toolCosts[t];
+    inp.closest('tr').lastElementChild.textContent = c.price > 0 && c.life > 0 ? money(byTool[t] / 60 / c.life * c.price) : '–';
+    renderQuote();
+  }));
+}
+
+// ---- compare with a baseline --------------------------------------------------
+
+let baseline = null;  // { code, name }
+
+// Line diff: trim the common start and end, then LCS on what's left (capped
+// so a pasted unrelated file can't freeze the page).
+function lineDiff(a, b) {
+  let s = 0;
+  while (s < a.length && s < b.length && a[s] === b[s]) s++;
+  let ea = a.length, eb = b.length;
+  while (ea > s && eb > s && a[ea - 1] === b[eb - 1]) { ea--; eb--; }
+  const A = a.slice(s, ea), B = b.slice(s, eb);
+  const out = [];
+  for (let i = 0; i < s; i++) out.push({ k: '=', t: a[i], la: i + 1, lb: i + 1 });
+  if (A.length * B.length > 4e6) {
+    A.forEach((t, i) => out.push({ k: '-', t, la: s + i + 1 }));
+    B.forEach((t, i) => out.push({ k: '+', t, lb: s + i + 1 }));
+  } else {
+    const n = A.length, m = B.length;
+    const L = Array.from({ length: n + 1 }, () => new Uint32Array(m + 1));
+    for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--)
+      L[i][j] = A[i] === B[j] ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
+    let i = 0, j = 0;
+    while (i < n || j < m) {
+      if (i < n && j < m && A[i] === B[j]) { out.push({ k: '=', t: A[i], la: s + i + 1, lb: s + j + 1 }); i++; j++; }
+      else if (j < m && (i === n || L[i][j + 1] >= L[i + 1][j])) { out.push({ k: '+', t: B[j], lb: s + j + 1 }); j++; }
+      else { out.push({ k: '-', t: A[i], la: s + i + 1 }); i++; }
+    }
+  }
+  for (let i = 0; i < a.length - ea; i++) out.push({ k: '=', t: a[ea + i], la: ea + i + 1, lb: eb + i + 1 });
+  return out;
+}
+
+function signed(v, unit = 's') {
+  const sign = v > 0 ? '+' : v < 0 ? '−' : '±';
+  return `${sign}${unit === 's' ? fmtDuration(Math.abs(v)) : Math.abs(v)}`;
+}
+
+function renderCompare() {
+  const box = $('compare');
+  $('baseClearBtn').hidden = !baseline;
+  if (!baseline || !result || !engine) return;
+  let base;
+  try { base = JSON.parse(engine.analyze(baseline.code, machineConfig())); } catch (e) { base = { ok: false }; }
+  if (!base.ok) { box.innerHTML = '<div class="diag-empty">The baseline could not be analysed with this machine config.</div>'; return; }
+  const cur = result;
+  const dt = cur.stats.time_s.total - base.stats.time_s.total;
+  const cls = v => v < -0.05 ? 'delta-good' : v > 0.05 ? 'delta-bad' : '';
+  const card = (label, a, b, d, dcls) => `<div class="stat"><div class="label">${esc(label)}</div><div class="value ${dcls}">${esc(d)}</div><div class="sub">${esc(a)} → ${esc(b)}</div></div>`;
+  const pct = base.stats.time_s.total > 0 ? ` (${dt > 0 ? '+' : ''}${(dt / base.stats.time_s.total * 100).toFixed(1)}%)` : '';
+  let html = `<p class="cmp-h">Baseline: ${esc(baseline.name)}. Current program compared against it, same machine and material.</p><div class="cmp-grid">` +
+    card('Cycle time', fmtDuration(base.stats.time_s.total), fmtDuration(cur.stats.time_s.total), signed(dt) + pct, cls(dt)) +
+    card('Cutting time', fmtDuration(base.stats.time_s.cutting), fmtDuration(cur.stats.time_s.cutting), signed(cur.stats.time_s.cutting - base.stats.time_s.cutting), cls(cur.stats.time_s.cutting - base.stats.time_s.cutting)) +
+    card('Errors', base.lint.errors, cur.lint.errors, signed(cur.lint.errors - base.lint.errors, ''), cls(cur.lint.errors - base.lint.errors)) +
+    card('Warnings', base.lint.warnings, cur.lint.warnings, signed(cur.lint.warnings - base.lint.warnings, ''), cls(cur.lint.warnings - base.lint.warnings)) +
+    '</div>';
+  // operations side by side, matched in order
+  const oa = computeOperations(base, baseline.code), ob = computeOperations(cur, $('code').value);
+  const rows = [];
+  for (let i = 0; i < Math.max(oa.length, ob.length); i++) {
+    const a = oa[i], b = ob[i];
+    const notes = [];
+    if (a && b) {
+      if (a.tool !== b.tool) notes.push(`tool T${a.tool} → T${b.tool}`);
+      if (range(a.rpm) !== range(b.rpm)) notes.push(`S ${range(a.rpm)} → ${range(b.rpm)}`);
+      if (range(a.feed) !== range(b.feed)) notes.push(`F ${range(a.feed)} → ${range(b.feed)}`);
+      if (Math.abs((a.zmin || 0) - (b.zmin || 0)) > 1e-6 && isFinite(a.zmin) && isFinite(b.zmin)) notes.push(`deepest Z ${a.zmin.toFixed(2)} → ${b.zmin.toFixed(2)}`);
+    }
+    const d = (b ? b.total : 0) - (a ? a.total : 0);
+    rows.push(`<tr><td class="name">${esc(b ? b.name : a.name)}${!a ? ' <span class="meta">(new)</span>' : !b ? ' <span class="meta">(removed)</span>' : ''}</td>
+      <td class="num">${a ? fmtDuration(a.total) : '–'}</td><td class="num">${b ? fmtDuration(b.total) : '–'}</td>
+      <td class="num ${cls(d)}">${signed(d)}</td><td class="name">${esc(notes.join(' · ')) || '<span class="meta">same speeds and feeds</span>'}</td></tr>`);
+  }
+  html += `<p class="cmp-h">Operations</p><div class="ops-wrap"><table class="ops"><thead><tr><th>Operation</th><th>Baseline</th><th>Current</th><th>Change</th><th>What changed</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
+  // changed lines with 2 lines of context
+  const diff = lineDiff(baseline.code.split('\n'), $('code').value.split('\n'));
+  const changed = diff.filter(d => d.k !== '=').length;
+  html += `<p class="cmp-h">${changed ? `${diff.filter(d => d.k === '-').length} lines removed, ${diff.filter(d => d.k === '+').length} added` : 'The program text is identical.'}</p>`;
+  if (changed) {
+    const keep = diff.map((d, i) => d.k !== '=' || diff.slice(Math.max(0, i - 2), i + 3).some(x => x.k !== '='));
+    let shown = 0, lines = [], gap = false;
+    diff.forEach((d, i) => {
+      if (!keep[i]) { gap = true; return; }
+      if (shown >= 300) return;
+      if (gap && lines.length) lines.push('<div class="gap">⋯</div>');
+      gap = false; shown++;
+      const n = d.k === '+' ? d.lb : d.la;
+      lines.push(`<div class="${d.k === '+' ? 'add' : d.k === '-' ? 'del' : ''}">${d.k === '=' ? ' ' : d.k} ${String(n).padStart(4)}  ${esc(d.t)}</div>`);
+    });
+    if (shown >= 300) lines.push('<div class="gap">… more changes not shown</div>');
+    html += `<div class="diff">${lines.join('')}</div>`;
+  }
+  box.innerHTML = html;
+}
+
+function setBaseline(code, name) {
+  baseline = { code, name };
+  track('compare-baseline');
+  renderCompare();
+}
+
+// ---- setup sheet ----------------------------------------------------------------
+
+function usedOffsets(code) {
+  const text = code.replace(/\([^)]*\)/g, '').replace(/;.*$/gm, '').toUpperCase();
+  return [...new Set((text.match(/G5[4-9](?![.\d])/g) || []))].sort();
+}
+
+function coolant(code) {
+  const text = code.replace(/\([^)]*\)/g, '').replace(/;.*$/gm, '').toUpperCase();
+  const c = [];
+  if (/M0?8(?!\d)/.test(text)) c.push('Flood (M8)');
+  if (/M0?7(?!\d)/.test(text)) c.push('Mist (M7)');
+  return c.length ? c.join(', ') : 'None programmed';
+}
+
+function buildSetupSheet() {
+  const r = result, code = $('code').value;
+  const ops = computeOperations(r, code);
+  const tools = machineTools();
+  let cfg = {};
+  try { cfg = JSON.parse(machineConfig() || '{}'); } catch (e) { cfg = {}; }
+  const sel = $('machineSelect');
+  const machine = sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text : 'none';
+  const mat = $('stockSelect').value ? $('stockSelect').options[$('stockSelect').selectedIndex].text : 'Not set';
+  const b = r.stats.cut_bounds;
+  const f2 = v => (+v).toFixed(2);
+  const ed = (cls = '') => `<div contenteditable="true" class="${cls}"></div>`;
+  // per-tool summary
+  const byTool = new Map();
+  for (const o of ops) {
+    if (!o.tool) continue;
+    const t = byTool.get(o.tool) || { ops: [], time: 0, cut: 0, rpm: [Infinity, 0], feed: [Infinity, 0], zmin: Infinity };
+    t.ops.push(o.name); t.time += o.total; t.cut += o.cut; t.zmin = Math.min(t.zmin, o.zmin);
+    t.rpm = [Math.min(t.rpm[0], o.rpm[0]), Math.max(t.rpm[1], o.rpm[1])];
+    t.feed = [Math.min(t.feed[0], o.feed[0]), Math.max(t.feed[1], o.feed[1])];
+    byTool.set(o.tool, t);
+  }
+  const offsets = usedOffsets(code);
+  const offRows = offsets.length ? offsets.map(g => {
+    const o = (cfg.work_offsets || {})[g];
+    return `<tr><td>${g}</td><td class="num">${o ? f2(o.x || 0) : '–'}</td><td class="num">${o ? f2(o.y || 0) : '–'}</td><td class="num">${o ? f2(o.z || 0) : '–'}</td><td>${ed()}</td></tr>`;
+  }).join('') : `<tr><td colspan="5" class="muted">No work offset in the program: the machine's active offset is used.</td></tr>`;
+  const toolRows = [...byTool.entries()].sort((a, b2) => a[0] - b2[0]).map(([t, v]) => {
+    const d = tools[t] || {};
+    return `<tr><td><b>T${t}</b></td><td>${esc(d.comment || '')}${ed()}</td><td class="num">${d.diameter_mm ? f2(d.diameter_mm) : ed()}</td>
+      <td class="num">${d.length_mm ? f2(d.length_mm) : ed()}</td><td class="num">${range(v.rpm)}</td><td class="num">${range(v.feed)}</td>
+      <td class="num">${isFinite(v.zmin) ? f2(v.zmin) : '–'}</td><td class="num">${fmtDuration(v.time)}</td><td>${ed()}</td></tr>`;
+  }).join('');
+  const opRows = ops.map((o, i) => `<tr><td class="num">${i + 1}</td><td>${esc(o.name)}</td><td>${o.tool ? 'T' + o.tool : '–'}</td>
+    <td class="num">${o.line}</td><td class="num">${fmtDuration(o.total)}</td><td>☐</td></tr>`).join('');
+  const lint = r.lint;
+  const today = new Date().toISOString().slice(0, 10);
+  return `<h1>${esc(programTitle(code))}</h1>
+  <div class="muted">Setup sheet · ${today} · generated by gcode-sim from the program; check every value against the job.</div>
+  <div class="fields">
+    <div><span>Part number</span>${ed()}</div><div><span>Revision</span>${ed()}</div>
+    <div><span>Program number</span>${ed()}</div><div><span>Programmer</span>${ed()}</div>
+    <div><span>Machine</span>${esc(machine)}</div><div><span>Material</span>${esc(mat)}</div>
+    <div><span>Cycle time</span><b>${fmtDuration(r.stats.time_s.total)}</b></div><div><span>Coolant</span>${coolant(code)}</div>
+  </div>
+  ${lint.errors || lint.warnings ? `<p class="warn">The program has ${lint.errors} error(s) and ${lint.warnings} warning(s) in gcode-sim. Resolve them before running.</p>` : ''}
+  <h2>Stock and work holding</h2>
+  <table><tr><th>Cut extent (X × Y × Z)</th><th>Z range cut</th><th>Stock size</th><th>Work holding</th></tr>
+  <tr><td>${b ? `${f2(b.max[0] - b.min[0])} × ${f2(b.max[1] - b.min[1])} × ${f2(b.max[2] - b.min[2])} mm` : '–'}</td>
+  <td>${b ? `${f2(b.min[2])} to ${f2(b.max[2])}` : '–'}</td><td>${ed()}</td><td>${ed()}</td></tr></table>
+  <h2>Work offsets</h2>
+  <table><tr><th>Offset</th><th>X</th><th>Y</th><th>Z</th><th>Zero location / notes</th></tr>${offRows}</table>
+  <h2>Tools</h2>
+  <table><tr><th>Tool</th><th>Description</th><th>Dia. mm</th><th>Length mm</th><th>Spindle rpm</th><th>Feed mm/min</th><th>Deepest Z</th><th>Time</th><th>Offset set ✓</th></tr>${toolRows || '<tr><td colspan="9" class="muted">No tools</td></tr>'}</table>
+  <h2>Operations</h2>
+  <table><tr><th>#</th><th>Operation</th><th>Tool</th><th>Line</th><th>Time</th><th>Done</th></tr>${opRows}</table>
+  <h2>Notes</h2>
+  <div class="notes" contenteditable="true"></div>`;
+}
+
+const SHEET_CSS = `body{margin:24px;background:#fff;}.sheet{color:#111;font:12.5px/1.45 system-ui,sans-serif;}
+.sheet h1{font-size:19px;margin:0 0 2px}.sheet h2{font-size:13.5px;margin:16px 0 6px;border-bottom:1.5px solid #111;padding-bottom:2px}
+.sheet table{width:100%;border-collapse:collapse}.sheet th,.sheet td{border:1px solid #999;padding:4px 6px;text-align:left;vertical-align:top}
+.sheet th{background:#eee;font-weight:600;font-size:11.5px}.sheet td.num{text-align:right}
+.sheet .fields{display:grid;grid-template-columns:repeat(4,1fr);margin-top:10px}.sheet .fields div{border:1px solid #999;padding:4px 6px;min-height:34px}
+.sheet .fields span{display:block;font-size:10px;color:#555;text-transform:uppercase}.sheet .notes{border:1px solid #999;min-height:70px;padding:6px}
+.sheet .muted{color:#555}.sheet .warn{color:#a00;font-weight:600}`;
+
+function openSetupSheet() {
+  if (!result) return;
+  $('sheet').innerHTML = buildSetupSheet();
+  track('setup-sheet');
+  $('sheetDialog').showModal();
+}
+
+function printSetupSheet() {
+  $('printArea').innerHTML = `<div class="sheet">${$('sheet').innerHTML}</div>`;
+  $('sheetDialog').close();
+  document.body.classList.add('printing');
+  const done = () => { document.body.classList.remove('printing'); $('printArea').innerHTML = ''; window.removeEventListener('afterprint', done); };
+  window.addEventListener('afterprint', done);
+  try { window.print(); } catch (e) { toast('Printing is blocked here: use Download and print the file.'); }
+  setTimeout(done, 1500);
+  track('setup-sheet-print');
+}
+
+function downloadSetupSheet() {
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Setup sheet - ${esc(programTitle($('code').value))}</title>
+<style>${SHEET_CSS}</style></head><body><div class="sheet">${$('sheet').innerHTML.replace(/ contenteditable="true"/g, '')}</div></body></html>`;
+  download('setup-sheet.html', html, 'text/html');
+  track('setup-sheet-download');
 }
 
 // ---- feedback and usage counts ---------------------------------------------
@@ -1193,6 +1566,29 @@ function wire() {
     if (q) { $('qRate').value = q.rate; $('qSetup').value = q.setup; $('qLoad').value = q.load; $('qQty').value = q.qty; }
   } catch (e) { /* storage blocked */ }
   for (const id of ['qRate', 'qSetup', 'qLoad', 'qQty']) $(id).addEventListener('input', renderQuote);
+  // setup sheet, compare
+  $('sheetBtn').addEventListener('click', openSetupSheet);
+  $('sheetClose').addEventListener('click', () => $('sheetDialog').close());
+  $('sheetPrint').addEventListener('click', printSetupSheet);
+  $('sheetDownload').addEventListener('click', downloadSetupSheet);
+  $('baseSetBtn').addEventListener('click', () => {
+    const sel = document.querySelector('.chip.active');
+    setBaseline(code.value, `${sel ? sel.textContent : 'program'} as of ${new Date().toLocaleTimeString()}`);
+    toast('Baseline saved. Edit the program to see what changes.');
+  });
+  $('baseOpenBtn').addEventListener('click', () => $('baseFile').click());
+  $('baseFile').addEventListener('change', async () => {
+    const f = $('baseFile').files[0];
+    $('baseFile').value = '';
+    if (!f) return;
+    if (f.size > 5e6) { toast('That file is over 5 MB.'); return; }
+    setBaseline(await f.text(), f.name);
+  });
+  $('baseClearBtn').addEventListener('click', () => {
+    baseline = null;
+    $('compare').innerHTML = '<div class="diag-empty">Baseline cleared.</div>';
+    $('baseClearBtn').hidden = true;
+  });
   $('ncBtn').addEventListener('click', () => { download('program.nc', code.value, 'text/plain'); track('download-program'); });
 
   $('svgBtn').addEventListener('click', () => {

@@ -211,6 +211,57 @@ const q = await page.evaluate(() => ({ total: result.stats.time_s.total, text: d
 const expect = ((30 + q.total / 60) / 60 * 120).toFixed(2);
 check(q.text.includes('$' + expect), `quote: 1 part = $${expect}`);
 
+// time by operation: named from the comments, adds up to the cycle time
+await page.click('[data-key=plate_drill_tap]');
+const ops = await page.evaluate(() => computeOperations(result, document.getElementById('code').value)
+  .map(o => ({ name: o.name, tool: o.tool, total: o.total })));
+check(JSON.stringify(ops.map(o => o.name)) === JSON.stringify(['FACE 1 mm off the top', 'SPOT DRILL', 'DRILL 10.2 THROUGH, HIGH-SPEED PECK', 'TAP M12 X 1.75']),
+  `operations named from comments: ${ops.map(o => o.name).join(' / ')}`);
+const opSum = ops.reduce((a, o) => a + o.total, 0);
+check(Math.abs(opSum - await page.evaluate(() => result.stats.time_s.total)) < 0.01, 'operation times add up to the cycle time');
+check((await page.locator('#ops tr.op-row').count()) === 4, 'operations table has 4 rows');
+await page.locator('#ops tr.op-row').nth(2).click();
+check(/DRILL 10.2/.test(await page.evaluate(() => { const t = document.getElementById('code'); return t.value.slice(t.selectionStart, t.selectionEnd); })),
+  'clicking an operation selects its heading line');
+
+// setup sheet
+await page.click('#sheetBtn');
+check(await page.evaluate(() => document.getElementById('sheetDialog').open), 'setup sheet opens');
+const sheet = await page.textContent('#sheet');
+check(/T5/.test(sheet) && /T4/.test(sheet) && /G54/.test(sheet) && /Flood \(M8\)/.test(sheet) && /Haas VF-5\/50/.test(sheet),
+  'setup sheet lists tools, work offset, coolant and machine');
+await page.locator('#sheet [contenteditable]').first().fill('PN-1234');
+const [sheetDl] = await Promise.all([page.waitForEvent('download'), page.click('#sheetDownload')]);
+const sheetHtml = (await import('node:fs')).readFileSync(await sheetDl.path(), 'utf8');
+check(sheetHtml.includes('PN-1234') && sheetHtml.includes('<table') && !sheetHtml.includes('contenteditable'), 'downloaded sheet keeps typed fields');
+await page.click('#sheetClose');
+check(!(await page.evaluate(() => document.getElementById('sheetDialog').open)), 'setup sheet closes');
+
+// tool cost feeds the quote
+await page.fill('#qRate', '100'); await page.fill('#qSetup', '0'); await page.fill('#qLoad', '0'); await page.fill('#qQty', '1');
+await page.evaluate(() => { document.querySelector('.tool-cost').open = true; });
+const before = await page.evaluate(() => toolingPerPart());
+await page.fill('#toolCost input[data-t="3"][data-k="price"]', '120');
+await page.fill('#toolCost input[data-t="3"][data-k="life"]', '60');
+await page.click('#qRate');  // leave the field
+const t3 = await page.evaluate(() => cutTimeByTool(result)[3]);
+const tooling = await page.evaluate(() => toolingPerPart());
+check(before === 0 && Math.abs(tooling - t3 / 60 / 60 * 120) < 1e-9, `tool wear per part = ${tooling.toFixed(4)}`);
+check((await page.textContent('#quote')).includes('Tool wear per part'), 'quote shows tool wear');
+await page.evaluate(() => { localStorage.removeItem('gcode-sim.toolcost'); toolCosts = {}; renderToolCost(); renderQuote(); });
+
+// compare against a baseline
+await page.click('#baseSetBtn');
+const edited = (await page.inputValue('#code')).replace('S2800 M3', 'S2200 M3').replace('F420.', 'F330.');
+await page.fill('#code', edited);
+await page.waitForFunction(() => document.getElementById('compare').textContent.includes('lines removed'));
+const cmp = await page.textContent('#compare');
+check(/S 2800 → 2200/.test(cmp) && /F 420 → 330/.test(cmp), 'compare lists the speed and feed change');
+check(/2 lines removed, 2 added/.test(cmp), 'compare counts changed lines');
+check(await page.evaluate(() => document.querySelector('#compare .stat .value').classList.contains('delta-bad')), 'slower cycle shown as worse');
+await page.click('#baseClearBtn');
+check(/cleared/.test(await page.textContent('#compare')), 'baseline clears');
+
 check(errors.length === 0, `no page errors${errors.length ? ': ' + errors.join('; ') : ''}`);
 await browser.close();
 console.log(failures ? `\n${failures} check(s) failed` : '\nall checks passed');

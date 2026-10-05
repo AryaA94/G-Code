@@ -243,6 +243,55 @@ dialog#feedbackDialog h2{ margin:0 0 10px; font-size:18px; }
 .gen-note{ font-size:12px; color:var(--muted); margin:6px 0 0; line-height:1.45; }
 .gen-warn{ font-size:12.5px; margin:0; padding:8px 10px; border-radius:6px; background:rgba(255,157,46,.1); border:1px solid rgba(255,157,46,.4); }
 .gen-actions{ display:flex; gap:10px; align-items:center; }
+.ops-wrap{ overflow-x:auto; }
+table.ops{ width:100%; border-collapse:collapse; font-size:12.5px; }
+table.ops th{ text-align:left; font-weight:500; color:var(--muted); font-size:11px; padding:4px 8px; border-bottom:1px solid var(--line-2); white-space:nowrap; }
+table.ops td{ padding:6px 8px; border-bottom:1px solid var(--line); vertical-align:middle; white-space:nowrap; }
+table.ops td.num{ font-family:var(--mono); text-align:right; }
+table.ops td.name{ white-space:normal; min-width:140px; }
+.bar{ height:8px; border-radius:4px; background:var(--accent); min-width:2px; }
+.bar-cell{ width:28%; min-width:80px; }
+table.ops tr.op-row{ cursor:pointer; }
+table.ops tr.op-row:hover td{ background:rgba(255,255,255,.03); }
+table.ops input{ width:90px; padding:4px 6px; font-size:12px; }
+.tool-cost{ margin:0 0 10px; }
+.tool-cost > summary{ cursor:pointer; font-size:12.5px; color:var(--muted); }
+.cmp-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:8px; margin-bottom:12px; }
+.delta-good{ color:#6bd49a; } .delta-bad{ color:#ff6b6b; }
+.diff{ font-family:var(--mono); font-size:12px; max-height:260px; overflow:auto; border:1px solid var(--line); border-radius:6px; padding:6px 0; margin-top:8px; }
+.diff div{ padding:0 10px; white-space:pre; }
+.diff .add{ background:rgba(107,212,154,.12); color:#9fe6bd; }
+.diff .del{ background:rgba(255,107,107,.12); color:#ffb1b1; }
+.diff .gap{ color:var(--muted); }
+.cmp-h{ font-size:12.5px; color:var(--muted); margin:12px 0 4px; }
+dialog#sheetDialog{ width:min(960px, calc(100% - 24px)); max-height:calc(100% - 24px); border:1px solid var(--line-2); border-radius:12px;
+  background:#151a20; color:#e7eaee; padding:0; }
+dialog#sheetDialog::backdrop{ background:rgba(0,0,0,.6); }
+.sheet-bar{ position:sticky; top:0; display:flex; flex-wrap:wrap; gap:8px 12px; align-items:center; padding:12px 16px; background:#151a20; border-bottom:1px solid var(--line-2); z-index:1; }
+.sheet-actions{ margin-left:auto; display:flex; gap:6px; }
+.sheet{ background:#fff; color:#111; margin:16px; padding:22px 26px; border-radius:4px; font:12.5px/1.45 system-ui, sans-serif; }
+.sheet h1{ font-size:19px; margin:0 0 2px; }
+.sheet h2{ font-size:13.5px; margin:16px 0 6px; border-bottom:1.5px solid #111; padding-bottom:2px; }
+.sheet table{ width:100%; border-collapse:collapse; }
+.sheet th, .sheet td{ border:1px solid #999; padding:4px 6px; text-align:left; vertical-align:top; }
+.sheet th{ background:#eee; font-weight:600; font-size:11.5px; }
+.sheet td.num{ text-align:right; font-variant-numeric:tabular-nums; }
+.sheet .fields{ display:grid; grid-template-columns:repeat(4,1fr); gap:0; margin-top:10px; }
+.sheet .fields div{ border:1px solid #999; padding:4px 6px; min-height:34px; }
+.sheet .fields span{ display:block; font-size:10px; color:#555; text-transform:uppercase; letter-spacing:.04em; }
+.sheet [contenteditable]{ outline:none; min-height:16px; }
+.sheet [contenteditable]:empty::before{ content:"\00a0"; }
+.sheet [contenteditable]:focus{ background:#fff7e0; }
+.sheet .notes{ border:1px solid #999; min-height:70px; padding:6px; }
+.sheet .muted{ color:#555; }
+.sheet .warn{ color:#a00; font-weight:600; }
+#printArea{ display:none; }
+@media print{
+  body.printing > *:not(#printArea){ display:none !important; }
+  body.printing #printArea{ display:block; }
+  body.printing{ background:#fff !important; }
+  body.printing .sheet{ margin:0; padding:0; }
+}
 .fb-options .btn{ text-align:center; text-decoration:none; }
 .fb-fallback{ margin-top:12px; font-size:12.5px; color:var(--muted); }
 .fb-fallback p{ margin:0 0 6px; }
@@ -424,12 +473,21 @@ dialog#feedbackDialog h2{ margin:0 0 10px; font-size:18px; }
         <div class="panel-head">
           <h2>Summary</h2>
           <div class="toolbar">
+            <button class="btn small" id="sheetBtn">Setup sheet</button>
             <button class="btn secondary small" id="ncBtn">Download program</button>
             <button class="btn secondary small" id="svgBtn">Download SVG</button>
             <button class="btn secondary small" id="jsonBtn">Download JSON</button>
           </div>
         </div>
         <div class="stat-grid" id="stats"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>Time by operation</h2>
+          <span class="meta">where the cycle time goes; operations are named from the comment before each tool change</span>
+        </div>
+        <div class="ops-wrap" id="ops"></div>
       </section>
 
       <section class="panel">
@@ -443,8 +501,28 @@ dialog#feedbackDialog h2{ margin:0 0 10px; font-size:18px; }
           <label>Load and unload, min/part<input type="number" id="qLoad" value="3" min="0" step="0.5"></label>
           <label>Quantity<input type="number" id="qQty" value="10" min="1" step="1"></label>
         </div>
+        <details class="tool-cost">
+          <summary>Tool cost per part (optional)</summary>
+          <p class="gen-note">Price and life in cutting minutes for each tool. Tool wear per part is its cutting time
+            divided by its life, times its price.</p>
+          <div id="toolCost"></div>
+        </details>
         <div class="stat-grid" id="quote"></div>
-        <p class="gen-note">Machine time only: material, tooling, deburring and margin are not included.</p>
+        <p class="gen-note" id="quoteNote">Machine time only: material, tooling, deburring and margin are not included.</p>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>Compare versions</h2>
+          <div class="toolbar">
+            <button class="btn secondary small" id="baseSetBtn">Use current as baseline</button>
+            <button class="btn secondary small" id="baseOpenBtn">Open baseline file</button>
+            <input type="file" id="baseFile" accept=".nc,.gcode,.ngc,.tap,.cnc,.txt,text/plain" hidden>
+            <button class="btn secondary small" id="baseClearBtn" hidden>Clear</button>
+          </div>
+        </div>
+        <div id="compare"><div class="diag-empty">Save a baseline, then edit the program (or open the other version as the
+          baseline) to see what changed: cycle time, operations, speeds and feeds, and the lines that differ.</div></div>
       </section>
 
       <section class="panel">
@@ -485,5 +563,19 @@ dialog#feedbackDialog h2{ margin:0 0 10px; font-size:18px; }
       <button type="button" class="linkish" id="fbClose" value="cancel">Close</button></p>
   </div>
 </dialog>
+
+<dialog id="sheetDialog" aria-labelledby="sheetTitle">
+  <div class="sheet-bar">
+    <b id="sheetTitle">Setup sheet</b>
+    <span class="meta">Click the blank fields to fill them in, then print or download. If Print does nothing in this viewer, download it and print from there.</span>
+    <span class="sheet-actions">
+      <button type="button" class="btn small" id="sheetPrint">Print</button>
+      <button type="button" class="btn secondary small" id="sheetDownload">Download</button>
+      <button type="button" class="btn secondary small" id="sheetClose">Close</button>
+    </span>
+  </div>
+  <div id="sheet" class="sheet"></div>
+</dialog>
+<div id="printArea"></div>
 
 <script>

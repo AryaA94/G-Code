@@ -167,6 +167,21 @@ result runs through the same checks and timing as any other program.
 **Job quote** turns the cycle time into cost: shop rate, setup, load/unload
 and quantity give cost per part and per batch (machine time only).
 
+## Shop paperwork: setup sheet, time by operation, tool cost, compare
+
+- **Setup sheet**: one click makes a printable sheet from the program:
+  machine, material, cycle time, coolant, cut extent, work offsets with
+  their values, a tool table (size, length, speeds, feeds, deepest Z, time)
+  and an operation checklist. Blank fields (part number, stock, work
+  holding, notes) can be filled in before printing or downloading.
+- **Time by operation**: the program split at tool changes and comment
+  headings (as CAM posts them), with time, cutting time, speeds, feeds and
+  depth for each. Click a row to jump to it.
+- **Tool cost**: price and life per tool add tool wear to the job quote.
+- **Compare versions**: save a baseline (or open the other file), edit,
+  and see the change in cycle time per operation, which speeds and feeds
+  changed, and a line diff.
+
 ## Machines and real CAM output
 
 `examples/machines/` has configs for a Haas VF-2, Haas Mini Mill, DMG MORI

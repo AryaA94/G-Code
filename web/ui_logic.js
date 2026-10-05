@@ -187,17 +187,21 @@ const GEN_HOLES = [
     .map(d => ({ key: 'D' + d, label: `Drilled Ø${d} mm`, drill: d, tap: null })),
 ];
 
-// "x, y" per line; tabs, commas, semicolons or spaces between. Lines without
-// two numbers (headers, blanks) are skipped and counted.
+// "x, y" per line, separated by commas, tabs, semicolons or spaces. A comma
+// is only read as a decimal point when the line already uses tabs or
+// semicolons between values (European spreadsheets: "12,5;40"). Lines
+// without two numbers (headers, blanks) are skipped and counted.
 function parseHoles(text) {
   const holes = [];
   let skipped = 0;
   for (const line of text.split(/\r?\n/)) {
     if (!line.trim()) continue;
-    const nums = line.match(/-?\d+(?:[.,]\d+)?/g);
-    if (!nums || nums.length < 2) { skipped++; continue; }
-    const [x, y] = nums.slice(0, 2).map(n => parseFloat(n.replace(',', '.')));
-    if (isFinite(x) && isFinite(y)) holes.push([x, y]); else skipped++;
+    const decimalComma = /[;\t]/.test(line);
+    const parts = line.trim().split(decimalComma ? /[;\t\s]+/ : /[,\s]+/)
+      .map(p => decimalComma ? p.replace(',', '.') : p)
+      .filter(p => /^-?(\d+\.?\d*|\.\d+)$/.test(p));
+    if (parts.length < 2) { skipped++; continue; }
+    holes.push([parseFloat(parts[0]), parseFloat(parts[1])]);
   }
   return { holes, skipped };
 }
@@ -1146,6 +1150,9 @@ function wire() {
     $(id).addEventListener('click', e => { e.preventDefault(); openFeedback(); });
   }
   for (const id of ['fbWith', 'fbPlain', 'fbEmail']) $(id).addEventListener('click', onFeedbackLink);
+  // closed by script: a <form method="dialog"> is blocked in sandboxed frames
+  $('fbClose').addEventListener('click', () => $('feedbackDialog').close());
+  $('feedbackDialog').addEventListener('click', e => { if (e.target === $('feedbackDialog')) $('feedbackDialog').close(); });
   $('fbCopy').addEventListener('click', async () => {
     $('fbLink').select();
     try { await navigator.clipboard.writeText($('fbLink').value); toast('Link copied'); }

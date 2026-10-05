@@ -206,6 +206,16 @@ footer a{ color:var(--muted); }
   .clock{ min-width:0; font-size:11px; }
 }
 .nav-links{ display:flex; gap:8px; }
+.nav-link{ white-space:nowrap; }
+.nav-link .short{ display:none; }
+@media (max-width: 640px){
+  .nav-link .long{ display:none; }
+  .nav-link .short{ display:inline; }
+  .nav-links{ gap:6px; }
+  .nav-link{ padding:6px 8px; font-size:12px; }
+  .playback{ flex-wrap:wrap; }
+  .playback #scrub{ order:5; flex-basis:100%; }
+}
 .hero-note{ margin-top:10px !important; font-size:13.5px !important; }
 .hero-note a{ color:var(--accent, #ff9d2e); }
 dialog#feedbackDialog{ max-width:520px; width:calc(100% - 32px); border:1px solid var(--line-2); border-radius:12px;
@@ -259,9 +269,9 @@ dialog#feedbackDialog h2{ margin:0 0 10px; font-size:18px; }
     gcode-sim
   </a>
   <span class="nav-links">
-    <a class="nav-link" id="offlineBtn" href="#" title="Save this tool as one file that works without internet">Download for offline use</a>
-    <a class="nav-link" id="feedbackBtn" href="https://github.com/AryaA94/G-Code/issues/new" target="_blank" rel="noopener">Send feedback</a>
-    <a class="nav-link" href="https://github.com/AryaA94/G-Code" target="_blank" rel="noopener">Source on GitHub</a>
+    <a class="nav-link" id="offlineBtn" href="#" title="Save this tool as one file that works without internet"><span class="long">Download for offline use</span><span class="short">Offline</span></a>
+    <a class="nav-link" id="feedbackBtn" href="https://github.com/AryaA94/G-Code/issues/new" target="_blank" rel="noopener"><span class="long">Send feedback</span><span class="short">Feedback</span></a>
+    <a class="nav-link" href="https://github.com/AryaA94/G-Code" target="_blank" rel="noopener"><span class="long">Source on GitHub</span><span class="short">GitHub</span></a>
   </span>
 </div></nav>
 
@@ -458,7 +468,7 @@ dialog#feedbackDialog h2{ margin:0 0 10px; font-size:18px; }
 
 
 <dialog id="feedbackDialog" aria-labelledby="fbTitle">
-  <form method="dialog">
+  <div class="fb-body">
     <h2 id="fbTitle">Send feedback</h2>
     <p class="fb-warn"><b>GitHub issues are public.</b> Anyone on the internet can read them. Don't include programs
       for customer parts or anything your company treats as confidential.</p>
@@ -472,8 +482,8 @@ dialog#feedbackDialog h2{ margin:0 0 10px; font-size:18px; }
       <div class="fb-copy"><input id="fbLink" readonly aria-label="feedback link"><button type="button" class="btn secondary small" id="fbCopy">Copy</button></div>
     </div>
     <p class="fb-foot">Your program never leaves your computer unless you choose an option above.
-      <button class="linkish" value="cancel">Close</button></p>
-  </form>
+      <button type="button" class="linkish" id="fbClose" value="cancel">Close</button></p>
+  </div>
 </dialog>
 
 <script>

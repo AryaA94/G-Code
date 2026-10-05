@@ -160,7 +160,8 @@ const withHref = await page.getAttribute('#fbWith', 'href');
 check(plainHref.includes('/issues/new') && withHref.includes('/issues/new'), 'feedback choices are real links to a new issue');
 check(!new URL(plainHref).searchParams.get('body').includes('G84') && new URL(withHref).searchParams.get('body').includes('G84'),
   'only the "include my program" link carries the program');
-await page.click('#feedbackDialog [value=cancel]');
+await page.click('#fbClose');
+check(!(await page.evaluate(() => document.getElementById('feedbackDialog').open)), 'Close closes the feedback dialog');
 
 // offline button is hidden when the page is already a local file
 check(await page.evaluate(() => document.getElementById('offlineBtn').hidden), 'offline download hidden for a local file');
@@ -198,6 +199,11 @@ await page.selectOption('#genHole', 'D17.5');
 await page.click('#genBtn');
 await page.waitForFunction(() => document.getElementById('code').value.includes('17.5 MM'));
 check(await page.evaluate(() => result.lint.errors === 0 && result.lint.warnings === 0), 'AR500 drilled holes: clean program');
+
+// hole list parsing: commas, tabs, semicolons, decimal commas, headers
+const parsed = await page.evaluate(() => parseHoles('X,Y\n10,10\n20, 20\n30\t30\n12,5;40,25\n-5 7.5\n  \nnote'));
+check(JSON.stringify(parsed) === JSON.stringify({ holes: [[10, 10], [20, 20], [30, 30], [12.5, 40.25], [-5, 7.5]], skipped: 2 }),
+  `hole list parsing: ${JSON.stringify(parsed)}`);
 
 // quote: cost follows the cycle time and the inputs
 await page.fill('#qRate', '120'); await page.fill('#qSetup', '30'); await page.fill('#qLoad', '0'); await page.fill('#qQty', '1');

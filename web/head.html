@@ -242,6 +242,8 @@ dialog#feedbackDialog h2{ margin:0 0 10px; font-size:18px; }
 .quote-inputs{ margin-bottom:10px; }
 .gen-note{ font-size:12px; color:var(--muted); margin:6px 0 0; line-height:1.45; }
 .gen-warn{ font-size:12.5px; margin:0; padding:8px 10px; border-radius:6px; background:rgba(255,157,46,.1); border:1px solid rgba(255,157,46,.4); }
+.gen-result{ font-size:13px; padding:8px 10px; border:1px solid var(--line-2); border-radius:6px; display:flex; flex-wrap:wrap; gap:6px 12px; align-items:center; }
+.gen-result[hidden]{ display:none; }
 .gen-actions{ display:flex; gap:10px; align-items:center; }
 .ops-wrap{ overflow-x:auto; }
 table.ops{ width:100%; border-collapse:collapse; font-size:12.5px; }
@@ -292,6 +294,15 @@ dialog#sheetDialog::backdrop{ background:rgba(0,0,0,.6); }
   body.printing{ background:#fff !important; }
   body.printing .sheet{ margin:0; padding:0; }
 }
+.tabs{ display:flex; gap:4px; margin:22px 0 0; border-bottom:1px solid var(--line-2); overflow-x:auto; }
+.tabs button{ background:none; border:0; border-bottom:2px solid transparent; color:var(--muted); font:600 14px inherit;
+  font-family:inherit; padding:10px 14px; cursor:pointer; white-space:nowrap; margin-bottom:-1px; }
+.tabs button:hover{ color:var(--text); }
+.tabs button[aria-selected="true"]{ color:var(--text); border-bottom-color:var(--accent); }
+.tab-lead{ color:var(--muted); font-size:13.5px; margin:12px 0 16px; }
+body[data-tab="check"] [data-tab]:not([data-tab~="check"]),
+body[data-tab="make"] [data-tab]:not([data-tab~="make"]),
+body[data-tab="plan"] [data-tab]:not([data-tab~="plan"]){ display:none !important; }
 .fb-options .btn{ text-align:center; text-decoration:none; }
 .fb-form{ display:flex; flex-direction:column; gap:8px; margin-bottom:14px; }
 .fb-form label{ display:flex; flex-direction:column; gap:4px; font-size:12.5px; color:var(--muted); }
@@ -343,54 +354,14 @@ dialog#sheetDialog::backdrop{ background:rgba(0,0,0,.6); }
   <p class="section-label">Examples, or try your own</p>
   <div class="presets" id="presets"></div>
 
-  <details class="panel gen" id="genPanel">
-    <summary><span class="gen-title">Generate a drilling program</span>
-      <span class="meta">from a hole list: spot, drill and tap, with speeds and feeds for the material</span></summary>
-    <div class="gen-grid">
-      <div class="gen-col">
-        <label class="gen-label" for="genHoles">Hole positions, X Y in mm from the plate's lower-left corner (one per line; paste from a spreadsheet)</label>
-        <textarea class="json gen-holes" id="genHoles" spellcheck="false" placeholder="25, 20&#10;100, 20&#10;175, 20"></textarea>
-        <div class="gen-add">
-          <span class="gen-label">Add a pattern:</span>
-          <button type="button" class="btn secondary small" id="genGridBtn">Grid</button>
-          <button type="button" class="btn secondary small" id="genCircleBtn">Bolt circle</button>
-          <button type="button" class="btn secondary small" id="genClearBtn">Clear</button>
-        </div>
-        <div class="gen-pattern" id="genGrid" hidden>
-          <label>X start<input type="number" id="gx0" value="25"></label>
-          <label>Y start<input type="number" id="gy0" value="25"></label>
-          <label>Columns<input type="number" id="gnx" value="4" min="1"></label>
-          <label>Rows<input type="number" id="gny" value="3" min="1"></label>
-          <label>X pitch<input type="number" id="gdx" value="50"></label>
-          <label>Y pitch<input type="number" id="gdy" value="40"></label>
-          <button type="button" class="btn small" id="genGridAdd">Add grid</button>
-        </div>
-        <div class="gen-pattern" id="genCircle" hidden>
-          <label>Center X<input type="number" id="ccx" value="150"></label>
-          <label>Center Y<input type="number" id="ccy" value="100"></label>
-          <label>Bolt circle dia.<input type="number" id="cdia" value="120"></label>
-          <label>Holes<input type="number" id="cn" value="6" min="1"></label>
-          <label>Start angle °<input type="number" id="ca0" value="0"></label>
-          <button type="button" class="btn small" id="genCircleAdd">Add circle</button>
-        </div>
-      </div>
-      <div class="gen-col">
-        <div class="gen-fields">
-          <label>Hole<select id="genHole"></select></label>
-          <label>Plate thickness, mm<input type="number" id="genThick" value="25" min="0.5" step="0.5"></label>
-          <label>Spot drill first<select id="genSpot"><option value="1">Yes</option><option value="0">No</option></select></label>
-          <label>Hole order<select id="genOrder"><option value="near">Shortest path</option><option value="list">As listed</option></select></label>
-        </div>
-        <p class="gen-note">Material and machine come from the panels below. The program uses tools T21 (spot drill), T22 (drill)
-          and T23 (tap), which are added to the machine config.</p>
-        <p class="gen-warn" id="genWarn" hidden></p>
-        <div class="gen-actions">
-          <button type="button" class="btn" id="genBtn">Generate program</button>
-          <span class="meta" id="genCount"></span>
-        </div>
-      </div>
-    </div>
-  </details>
+  <nav class="tabs" role="tablist" aria-label="What do you want to do">
+    <button role="tab" data-tabbtn="check">Check a program</button>
+    <button role="tab" data-tabbtn="make">Make a drilling program</button>
+    <button role="tab" data-tabbtn="plan">Plan and cost</button>
+  </nav>
+  <p class="tab-lead" data-tab="check">Find mistakes, see the toolpath and cycle time, get a setup sheet, compare two versions.</p>
+  <p class="tab-lead" data-tab="make">Turn a list of hole positions into a complete spot, drill and tap program for your material and machine.</p>
+  <p class="tab-lead" data-tab="plan">Part weight and stock, job quote with tool wear, and a planner for every part of the season.</p>
 
   <div class="workspace">
     <div class="side-col">
@@ -431,13 +402,66 @@ dialog#sheetDialog::backdrop{ background:rgba(0,0,0,.6); }
         </details>
       </section>
 
-      <section class="panel">
+      <section class="panel" data-tab="check">
         <div class="panel-head"><h2>Lint rules</h2></div>
         <dl class="rules" id="rules"></dl>
       </section>
     </div>
 
     <div class="main-col">
+      <details class="panel gen" id="genPanel" data-tab="make" open>
+        <summary><span class="gen-title">Generate a drilling program</span>
+          <span class="meta">from a hole list: spot, drill and tap, with speeds and feeds for the material</span></summary>
+        <div class="gen-grid">
+          <div class="gen-col">
+            <label class="gen-label" for="genHoles">Hole positions, X Y in mm from the plate's lower-left corner (one per line; paste from a spreadsheet)</label>
+            <textarea class="json gen-holes" id="genHoles" spellcheck="false" placeholder="25, 20&#10;100, 20&#10;175, 20"></textarea>
+            <div class="gen-add">
+              <span class="gen-label">Add a pattern:</span>
+              <button type="button" class="btn secondary small" id="genGridBtn">Grid</button>
+              <button type="button" class="btn secondary small" id="genCircleBtn">Bolt circle</button>
+              <button type="button" class="btn secondary small" id="genClearBtn">Clear</button>
+            </div>
+            <div class="gen-pattern" id="genGrid" hidden>
+              <label>X start<input type="number" id="gx0" value="25"></label>
+              <label>Y start<input type="number" id="gy0" value="25"></label>
+              <label>Columns<input type="number" id="gnx" value="4" min="1"></label>
+              <label>Rows<input type="number" id="gny" value="3" min="1"></label>
+              <label>X pitch<input type="number" id="gdx" value="50"></label>
+              <label>Y pitch<input type="number" id="gdy" value="40"></label>
+              <button type="button" class="btn small" id="genGridAdd">Add grid</button>
+            </div>
+            <div class="gen-pattern" id="genCircle" hidden>
+              <label>Center X<input type="number" id="ccx" value="150"></label>
+              <label>Center Y<input type="number" id="ccy" value="100"></label>
+              <label>Bolt circle dia.<input type="number" id="cdia" value="120"></label>
+              <label>Holes<input type="number" id="cn" value="6" min="1"></label>
+              <label>Start angle °<input type="number" id="ca0" value="0"></label>
+              <button type="button" class="btn small" id="genCircleAdd">Add circle</button>
+            </div>
+          </div>
+          <div class="gen-col">
+            <div class="gen-fields">
+              <label>Hole<select id="genHole"></select></label>
+              <label>Plate thickness, mm<input type="number" id="genThick" value="25" min="0.5" step="0.5"></label>
+              <label>Spot drill first<select id="genSpot"><option value="1">Yes</option><option value="0">No</option></select></label>
+              <label>Hole order<select id="genOrder"><option value="near">Shortest path</option><option value="list">As listed</option></select></label>
+            </div>
+            <p class="gen-note">Material and machine come from the Machine panel on the left. The program uses tools T21 (spot drill), T22 (drill)
+              and T23 (tap), which are added to the machine config.</p>
+            <p class="gen-warn" id="genWarn" hidden></p>
+            <div class="gen-actions">
+              <button type="button" class="btn" id="genBtn">Generate program</button>
+              <span class="meta" id="genCount"></span>
+            </div>
+            <div class="gen-result" id="genResult" hidden>
+              <span id="genResultText"></span>
+              <button type="button" class="linkish" id="genToCheck">See the full checks and setup sheet →</button>
+            </div>
+          </div>
+        </div>
+      </details>
+
       <section class="panel">
         <div class="panel-head">
           <h2>Toolpath</h2>
@@ -476,7 +500,7 @@ dialog#sheetDialog::backdrop{ background:rgba(0,0,0,.6); }
         </div>
       </section>
 
-      <section class="panel">
+      <section class="panel" data-tab="check">
         <div class="panel-head">
           <h2>Summary</h2>
           <div class="toolbar">
@@ -489,7 +513,15 @@ dialog#sheetDialog::backdrop{ background:rgba(0,0,0,.6); }
         <div class="stat-grid" id="stats"></div>
       </section>
 
-      <section class="panel">
+      <section class="panel" data-tab="check">
+        <div class="panel-head">
+          <h2>Diagnostics</h2>
+          <div class="counts" id="counts"></div>
+        </div>
+        <div class="diag-list" id="diags"></div>
+      </section>
+
+      <section class="panel" data-tab="plan">
         <div class="panel-head">
           <h2>Part, stock and weight</h2>
           <span class="meta">material removal simulated on a block of stock</span>
@@ -509,7 +541,7 @@ dialog#sheetDialog::backdrop{ background:rgba(0,0,0,.6); }
           tools without a diameter in the machine config are assumed to be 6 mm. Prices are rough defaults: use your supplier's.</p>
       </section>
 
-      <section class="panel">
+      <section class="panel" data-tab="check">
         <div class="panel-head">
           <h2>Time by operation</h2>
           <span class="meta">where the cycle time goes; operations are named from the comment before each tool change</span>
@@ -517,7 +549,7 @@ dialog#sheetDialog::backdrop{ background:rgba(0,0,0,.6); }
         <div class="ops-wrap" id="ops"></div>
       </section>
 
-      <section class="panel">
+      <section class="panel" data-tab="plan">
         <div class="panel-head">
           <h2>Job quote</h2>
           <span class="meta">machine time for this program, as cost</span>
@@ -538,7 +570,7 @@ dialog#sheetDialog::backdrop{ background:rgba(0,0,0,.6); }
         <p class="gen-note" id="quoteNote">Machine time only: material, tooling, deburring and margin are not included.</p>
       </section>
 
-      <section class="panel">
+      <section class="panel" data-tab="plan">
         <div class="panel-head">
           <h2>Season job planner</h2>
           <div class="toolbar">
@@ -557,7 +589,7 @@ dialog#sheetDialog::backdrop{ background:rgba(0,0,0,.6); }
         <div class="stat-grid" id="planStats" style="margin-top:10px"></div>
       </section>
 
-      <section class="panel">
+      <section class="panel" data-tab="check">
         <div class="panel-head">
           <h2>Compare versions</h2>
           <div class="toolbar">
@@ -571,15 +603,7 @@ dialog#sheetDialog::backdrop{ background:rgba(0,0,0,.6); }
           baseline) to see what changed: cycle time, operations, speeds and feeds, and the lines that differ.</div></div>
       </section>
 
-      <section class="panel">
-        <div class="panel-head">
-          <h2>Diagnostics</h2>
-          <div class="counts" id="counts"></div>
-        </div>
-        <div class="diag-list" id="diags"></div>
-      </section>
-
-      <section class="panel">
+      <section class="panel" data-tab="check">
         <div class="panel-head">
           <h2>Feed along the program</h2>
           <span class="meta">planned speed vs time, with acceleration and look-ahead</span>

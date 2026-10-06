@@ -166,6 +166,7 @@ check(!(await page.evaluate(() => document.getElementById('feedbackDialog').open
 // offline button is hidden when the page is already a local file
 check(await page.evaluate(() => document.getElementById('offlineBtn').hidden), 'offline download hidden for a local file');
 
+await page.evaluate(() => showTab('make'));
 // drilling program generator: grid of tapped holes in 4140 on the VF-5/50
 await page.selectOption('#machineSelect', 'haas_vf5_50');
 await page.selectOption('#stockSelect', 'alloy_steel');
@@ -191,6 +192,7 @@ let genNative; try { genNative = JSON.parse(execFileSync(cli, ['lint', tmpNc, '-
 fsMod.unlinkSync(tmpNc); fsMod.unlinkSync(tmpJson);
 check(JSON.stringify(genNative) === JSON.stringify(gen.lint), 'generated program: page and CLI agree');
 
+await page.evaluate(() => showTab('make'));
 // too hard to tap: AR500 refuses with a reason
 await page.selectOption('#stockSelect', 'ar500');
 await page.click('#genBtn');
@@ -205,12 +207,14 @@ const parsed = await page.evaluate(() => parseHoles('X,Y\n10,10\n20, 20\n30\t30\
 check(JSON.stringify(parsed) === JSON.stringify({ holes: [[10, 10], [20, 20], [30, 30], [12.5, 40.25], [-5, 7.5]], skipped: 2 }),
   `hole list parsing: ${JSON.stringify(parsed)}`);
 
+await page.evaluate(() => showTab('plan'));
 // quote: cost follows the cycle time and the inputs
 await page.fill('#qRate', '120'); await page.fill('#qSetup', '30'); await page.fill('#qLoad', '0'); await page.fill('#qQty', '1');
 const q = await page.evaluate(() => ({ total: result.stats.time_s.total, text: document.getElementById('quote').textContent }));
 const expect = ((30 + q.total / 60) / 60 * 120).toFixed(2);
 check(q.text.includes('$' + expect), `quote: 1 part = $${expect}`);
 
+await page.evaluate(() => showTab('check'));
 // time by operation: named from the comments, adds up to the cycle time
 await page.click('[data-key=plate_drill_tap]');
 const ops = await page.evaluate(() => computeOperations(result, document.getElementById('code').value)
@@ -237,6 +241,7 @@ check(sheetHtml.includes('PN-1234') && sheetHtml.includes('<table') && !sheetHtm
 await page.click('#sheetClose');
 check(!(await page.evaluate(() => document.getElementById('sheetDialog').open)), 'setup sheet closes');
 
+await page.evaluate(() => showTab('plan'));
 // tool cost feeds the quote
 await page.fill('#qRate', '100'); await page.fill('#qSetup', '0'); await page.fill('#qLoad', '0'); await page.fill('#qQty', '1');
 await page.evaluate(() => { document.querySelector('.tool-cost').open = true; });
@@ -250,6 +255,7 @@ check(before === 0 && Math.abs(tooling - t3 / 60 / 60 * 120) < 1e-9, `tool wear 
 check((await page.textContent('#quote')).includes('Tool wear per part'), 'quote shows tool wear');
 await page.evaluate(() => { localStorage.removeItem('gcode-sim.toolcost'); toolCosts = {}; renderToolCost(); renderQuote(); });
 
+await page.evaluate(() => showTab('check'));
 // compare against a baseline
 await page.click('#baseSetBtn');
 const edited = (await page.inputValue('#code')).replace('S2800 M3', 'S2200 M3').replace('F420.', 'F330.');
@@ -262,6 +268,7 @@ check(await page.evaluate(() => document.querySelector('#compare .stat .value').
 await page.click('#baseClearBtn');
 check(/cleared/.test(await page.textContent('#compare')), 'baseline clears');
 
+await page.evaluate(() => showTab('plan'));
 // material removal: known answer, a 30 x 30 x 10 mm square profiled out of 50 x 50 stock
 await page.selectOption('#machineSelect', 'haas_vf2');
 await page.selectOption('#stockSelect', 'aluminum_6061');
@@ -283,6 +290,7 @@ await page.uncheck('#showPart');
 await page.click('[data-key=plate_drill_tap]');
 check(await page.evaluate(() => stock.sz) === 25, 'plate example: 25 mm stock (drill breakthrough ignored)');
 
+await page.evaluate(() => showTab('plan'));
 // planner and cost report
 await page.evaluate(() => { plan = []; savePlan(); renderPlan(); });
 await page.click('[data-key=fsae_upright]'); await page.click('#planAdd');
@@ -302,6 +310,7 @@ check(await page.evaluate(() => plan.length) === 2 && /again/.test(await page.te
 await page.click('#planClear');
 check(await page.evaluate(() => plan.length) === 0, 'second click clears');
 
+await page.evaluate(() => showTab('check'));
 // feedback form: hidden without a key; with one, sends the message (service faked here)
 const realKey = await page.evaluate(() => WEB3FORMS_KEY);
 await page.evaluate(() => { WEB3FORMS_KEY = ''; });
@@ -332,6 +341,24 @@ await page.evaluate(k => { WEB3FORMS_KEY = k; }, realKey);
 await page.click('#feedbackBtn');
 check(!(await page.evaluate(() => document.getElementById('fbForm').hidden)) === !!realKey, 'email form shown with the real key');
 await page.click('#fbClose');
+
+// tabs: each shows its own panels; the program, machine and toolpath stay
+const visible = id => page.evaluate(i => { const e = document.getElementById(i); return !!e && e.offsetParent !== null; }, id);
+await page.click('[data-tabbtn=make]');
+check(await visible('genBtn') && !(await visible('stats')) && await visible('code') && await visible('canvas'), 'Make tab: generator, program and toolpath');
+await page.click('[data-tabbtn=plan]');
+check(await visible('quote') && await visible('planAdd') && await visible('partStats') && !(await visible('diags')) && !(await visible('genBtn')), 'Plan tab: quote, weight and planner only');
+await page.click('[data-tabbtn=check]');
+check(await visible('stats') && await visible('diags') && await visible('sheetBtn') && !(await visible('quote')), 'Check tab: summary, problems, setup sheet');
+check(await page.getAttribute('[data-tabbtn=check]', 'aria-selected') === 'true', 'active tab is marked');
+await page.evaluate(() => showTab('plan')); await page.click('[data-tabbtn=make]');
+await page.click('#genClearBtn'); await page.fill('#genHoles', '10, 10\n30, 10');
+await page.selectOption('#stockSelect', 'alloy_steel'); await page.selectOption('#genHole', 'D9');
+await page.click('#genBtn');
+check(await page.evaluate(() => document.body.dataset.tab) === 'make' && /No problems found/.test(await page.textContent('#genResult')),
+  'generating stays on Make and summarises the checks');
+await page.click('#genToCheck');
+check(await page.evaluate(() => document.body.dataset.tab) === 'check', '"See the full checks" opens the Check tab');
 
 check(errors.length === 0, `no page errors${errors.length ? ': ' + errors.join('; ') : ''}`);
 await browser.close();

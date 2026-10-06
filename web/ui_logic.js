@@ -321,7 +321,13 @@ function generateProgram() {
   renderPart(); draw();
   $('genCount').textContent = `${holes.length} hole${holes.length === 1 ? '' : 's'} · ${out.summary}`;
   track('generate-' + (hole.tap ? 'tap' : 'drill'));
-  document.querySelector('.workspace').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  // stay here so the inputs can be tweaked; summarise the checks
+  const l = result ? result.lint : { errors: 0, warnings: 0 };
+  $('genResultText').innerHTML = `${l.errors || l.warnings
+    ? `<b class="delta-bad">${l.errors} error${l.errors === 1 ? '' : 's'}, ${l.warnings} warning${l.warnings === 1 ? '' : 's'}</b>`
+    : '<b class="delta-good">No problems found</b>'} · cycle time ${result ? fmtDuration(result.stats.time_s.total) : '–'} · program loaded in the editor`;
+  $('genResult').hidden = false;
+  $('canvas').scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 function addPattern(kind) {
@@ -1065,6 +1071,31 @@ function planCsv() {
       p.blank, f(p.blankKg, 3), f(p.matCost, 2), f(r.machineEach, 2), f(p.tooling, 2), f(r.each, 2), f(r.batch, 2)];
   });
   return [head, ...rows].map(r => r.map(q).join(',')).join('\n') + '\n';
+}
+
+// ---- tabs -------------------------------------------------------------------------
+
+const TABS = ['check', 'make', 'plan'];
+const TAB_KEY = 'gcode-sim.tab';
+
+// Panels carry data-tab="check plan ..."; the body's data-tab hides the rest.
+// The program, machine and toolpath panels have no data-tab and always show.
+function showTab(name, { remember = true } = {}) {
+  if (!TABS.includes(name)) name = 'check';
+  document.body.dataset.tab = name;
+  document.querySelectorAll('[data-tabbtn]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tabbtn === name)));
+  if (remember) {
+    try { localStorage.setItem(TAB_KEY, name); } catch (e) { /* storage blocked */ }
+    try { history.replaceState(null, '', '#' + name); } catch (e) { /* not allowed in some viewers */ }
+  }
+  draw();  // the viewer may have changed size
+}
+
+function initialTab() {
+  const h = (location.hash || '').slice(1);
+  if (TABS.includes(h)) return h;
+  try { const t = localStorage.getItem(TAB_KEY); if (TABS.includes(t)) return t; } catch (e) { /* storage blocked */ }
+  return 'check';
 }
 
 // ---- feedback and usage counts ---------------------------------------------
@@ -1853,6 +1884,8 @@ async function download(name, text, type) {
 // ---- wiring ---------------------------------------------------------------------
 
 function wire() {
+  document.querySelectorAll('[data-tabbtn]').forEach(b => b.addEventListener('click', () => { showTab(b.dataset.tabbtn); track('tab-' + b.dataset.tabbtn); }));
+  showTab(initialTab(), { remember: false });
   buildPresets();
   const sel = $('machineSelect');
   for (const m of machineList()) sel.add(new Option(m.name, m.key));
@@ -1945,6 +1978,7 @@ function wire() {
   $('genClearBtn').addEventListener('click', () => { $('genHoles').value = ''; updateGenCount(); });
   $('genHoles').addEventListener('input', updateGenCount);
   $('genBtn').addEventListener('click', generateProgram);
+  $('genToCheck').addEventListener('click', () => { showTab('check'); $('stats').scrollIntoView({ behavior: 'smooth', block: 'start' }); });
   try {
     const q = JSON.parse(localStorage.getItem(QUOTE_KEY) || 'null');
     if (q) { $('qRate').value = q.rate; $('qSetup').value = q.setup; $('qLoad').value = q.load; $('qQty').value = q.qty; }

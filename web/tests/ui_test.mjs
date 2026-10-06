@@ -303,8 +303,10 @@ await page.click('#planClear');
 check(await page.evaluate(() => plan.length) === 0, 'second click clears');
 
 // feedback form: hidden without a key; with one, sends the message (service faked here)
+const realKey = await page.evaluate(() => WEB3FORMS_KEY);
+await page.evaluate(() => { WEB3FORMS_KEY = ''; });
 await page.click('#feedbackBtn');
-check(await page.evaluate(() => document.getElementById('fbForm').hidden), 'email form hidden until a key is set');
+check(await page.evaluate(() => document.getElementById('fbForm').hidden), 'email form hidden without a key');
 await page.click('#fbClose');
 let sent = null;
 await page.route('https://api.web3forms.com/submit', route => { sent = JSON.parse(route.request().postData()); route.fulfill({ status: 200, contentType: 'application/json', body: '{"success":true}' }); });
@@ -326,7 +328,10 @@ await page.waitForFunction(() => /Could not send/.test(document.getElementById('
 check(/Invalid key/.test(await page.textContent('#fbStatus')), 'a failed send says why');
 await page.unroute('https://api.web3forms.com/submit');
 await page.click('#fbClose');
-await page.evaluate(() => { WEB3FORMS_KEY = ''; });
+await page.evaluate(k => { WEB3FORMS_KEY = k; }, realKey);
+await page.click('#feedbackBtn');
+check(!(await page.evaluate(() => document.getElementById('fbForm').hidden)) === !!realKey, 'email form shown with the real key');
+await page.click('#fbClose');
 
 check(errors.length === 0, `no page errors${errors.length ? ': ' + errors.join('; ') : ''}`);
 await browser.close();

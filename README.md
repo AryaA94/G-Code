@@ -182,6 +182,20 @@ and quantity give cost per part and per batch (machine time only).
   and see the change in cycle time per operation, which speeds and feeds
   changed, and a line diff.
 
+## Part weight, stock and the season planner (built with FSAE teams in mind)
+
+- **Finished part**: a height-map simulation removes material from a block
+  of stock as the tools pass, then shows the part in 3D and reports volume
+  removed and finished mass (offcuts and slugs that fall away are separated
+  out). The stock size is guessed from the program and can be edited.
+- **Stock and material cost**: blank size to order with an allowance, its
+  weight, and cost at a price per kg.
+- **Season job planner**: add each part with its quantity; machine hours
+  per machine, weeks needed at the hours you can get, a due-date check,
+  total mass and cost. **Export cost report (CSV)** gives one row per part
+  (material, mass, volume removed, machine time, material, machine and tool
+  wear cost) as a starting point for a Cost Report.
+
 ## Machines and real CAM output
 
 `examples/machines/` has configs for a Haas VF-2, Haas Mini Mill, DMG MORI

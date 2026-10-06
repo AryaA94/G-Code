@@ -293,6 +293,12 @@ dialog#sheetDialog::backdrop{ background:rgba(0,0,0,.6); }
   body.printing .sheet{ margin:0; padding:0; }
 }
 .fb-options .btn{ text-align:center; text-decoration:none; }
+.fb-form{ display:flex; flex-direction:column; gap:8px; margin-bottom:14px; }
+.fb-form label{ display:flex; flex-direction:column; gap:4px; font-size:12.5px; color:var(--muted); }
+.fb-form label.check{ flex-direction:row; align-items:center; gap:6px; }
+.fb-form textarea{ background:#0e1217; color:#e7eaee; border:1px solid var(--line-2); border-radius:6px; padding:8px; font:13px system-ui, sans-serif; resize:vertical; }
+.fb-send{ display:flex; gap:10px; align-items:center; }
+.fb-or{ margin:6px 0 0; font-size:12.5px; color:var(--muted); }
 .fb-fallback{ margin-top:12px; font-size:12.5px; color:var(--muted); }
 .fb-fallback p{ margin:0 0 6px; }
 .fb-copy{ display:flex; gap:6px; }
@@ -448,6 +454,7 @@ dialog#sheetDialog::backdrop{ background:rgba(0,0,0,.6); }
               <option value="tool">Colour: tool</option>
             </select>
             <label class="check"><input type="checkbox" id="showRapids" checked> rapids</label>
+            <label class="check" title="Show the stock with the material removed"><input type="checkbox" id="showPart"> finished part</label>
           </div>
         </div>
         <div class="viewer" id="viewer">
@@ -484,6 +491,26 @@ dialog#sheetDialog::backdrop{ background:rgba(0,0,0,.6); }
 
       <section class="panel">
         <div class="panel-head">
+          <h2>Part, stock and weight</h2>
+          <span class="meta">material removal simulated on a block of stock</span>
+        </div>
+        <div class="quote-inputs">
+          <label>Stock X, mm<input type="number" id="stX" min="1" step="1"></label>
+          <label>Stock Y, mm<input type="number" id="stY" min="1" step="1"></label>
+          <label>Stock thickness, mm<input type="number" id="stZ" min="0.5" step="0.5"></label>
+          <label>Stock lower-left X<input type="number" id="stX0" step="1"></label>
+          <label>Stock lower-left Y<input type="number" id="stY0" step="1"></label>
+          <label>Blank allowance, mm/side<input type="number" id="stAllow" value="3" min="0" step="0.5"></label>
+          <label>Material price, $/kg<input type="number" id="stPrice" min="0" step="0.5"></label>
+          <label>&nbsp;<button type="button" class="btn secondary small" id="stAuto">Fit stock to program</button></label>
+        </div>
+        <div class="stat-grid" id="partStats"></div>
+        <p class="gen-note" id="partNote">Top of stock is Z0. Volume is simulated on a grid, so expect a percent or two of error;
+          tools without a diameter in the machine config are assumed to be 6 mm. Prices are rough defaults: use your supplier's.</p>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
           <h2>Time by operation</h2>
           <span class="meta">where the cycle time goes; operations are named from the comment before each tool change</span>
         </div>
@@ -509,6 +536,25 @@ dialog#sheetDialog::backdrop{ background:rgba(0,0,0,.6); }
         </details>
         <div class="stat-grid" id="quote"></div>
         <p class="gen-note" id="quoteNote">Machine time only: material, tooling, deburring and margin are not included.</p>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>Season job planner</h2>
+          <div class="toolbar">
+            <button class="btn small" id="planAdd">Add this part</button>
+            <button class="btn secondary small" id="planCsv">Export cost report (CSV)</button>
+            <button class="btn secondary small" id="planClear">Clear</button>
+          </div>
+        </div>
+        <p class="gen-note" style="margin:0 0 10px">Add each part as you check its program: machine time, mass, material and cost add
+          up across the season. Kept in this browser.</p>
+        <div class="quote-inputs">
+          <label>Machine hours available per week<input type="number" id="planHours" value="6" min="0" step="0.5"></label>
+          <label>Parts due by<input type="date" id="planDue"></label>
+        </div>
+        <div class="ops-wrap" id="plan"></div>
+        <div class="stat-grid" id="planStats" style="margin-top:10px"></div>
       </section>
 
       <section class="panel">
@@ -548,6 +594,13 @@ dialog#sheetDialog::backdrop{ background:rgba(0,0,0,.6); }
 <dialog id="feedbackDialog" aria-labelledby="fbTitle">
   <div class="fb-body">
     <h2 id="fbTitle">Send feedback</h2>
+    <div class="fb-form" id="fbForm" hidden>
+      <label>What happened, or what would you like?<textarea id="fbMsg" rows="4" required></textarea></label>
+      <label>Your email, if you'd like a reply (optional)<input type="email" id="fbFrom" autocomplete="email"></label>
+      <label class="check"><input type="checkbox" id="fbIncl"> Include my program (sent privately, only to the developer)</label>
+      <div class="fb-send"><button type="button" class="btn small" id="fbSend">Send</button><span class="meta" id="fbStatus"></span></div>
+      <p class="fb-or">Or post it publicly on GitHub:</p>
+    </div>
     <p class="fb-warn"><b>GitHub issues are public.</b> Anyone on the internet can read them. Don't include programs
       for customer parts or anything your company treats as confidential.</p>
     <div class="fb-options">

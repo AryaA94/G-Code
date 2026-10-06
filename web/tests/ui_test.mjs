@@ -262,6 +262,72 @@ check(await page.evaluate(() => document.querySelector('#compare .stat .value').
 await page.click('#baseClearBtn');
 check(/cleared/.test(await page.textContent('#compare')), 'baseline clears');
 
+// material removal: known answer, a 30 x 30 x 10 mm square profiled out of 50 x 50 stock
+await page.selectOption('#machineSelect', 'haas_vf2');
+await page.selectOption('#stockSelect', 'aluminum_6061');
+await page.fill('#code', 'G21 G90\nT1 M6\nS8000 M3\nG0 X-3 Y-3 Z5\nG1 Z-11 F300\nG1 X33 F800\nG1 Y33\nG1 X-3\nG1 Y-3\nG0 Z5\nM30\n');
+await page.waitForFunction(() => result && result.stats.moves.linear === 5);
+for (const [id, v] of [['stX', 50], ['stY', 50], ['stZ', 10], ['stX0', -10], ['stY0', -10]]) { await page.fill('#' + id, String(v)); await page.dispatchEvent('#' + id, 'change'); }
+const sq = await page.evaluate(() => ({ vol: partSim.partVol, pieces: partSim.pieces, g: partNumbers().partG }));
+check(Math.abs(sq.vol - 9000) < 1 && sq.pieces === 2, `profiled square: ${sq.vol.toFixed(1)} mm³ (exact 9000), part and offcut separated`);
+check(Math.abs(sq.g - 9000 * 2.70 / 1000) < 0.1, `profiled square mass ${sq.g.toFixed(2)} g in 6061`);
+
+// FSAE upright: 12 mm plate guessed from the program, part separated, about 294 g in 7075
+await page.click('[data-key=fsae_upright]');
+const up = await page.evaluate(() => ({ sz: stock.sz, g: partNumbers().partG, pieces: partSim.pieces }));
+check(up.sz === 12 && up.pieces >= 2 && Math.abs(up.g - 294) < 6, `upright: ${up.sz} mm stock, ${up.g.toFixed(0)} g`);
+await page.check('#showPart');
+check(await page.evaluate(() => { draw(); return true; }), 'finished part view draws');
+await page.uncheck('#showPart');
+// generated plate: stock thickness is the plate, not the drill breakthrough
+await page.click('[data-key=plate_drill_tap]');
+check(await page.evaluate(() => stock.sz) === 25, 'plate example: 25 mm stock (drill breakthrough ignored)');
+
+// planner and cost report
+await page.evaluate(() => { plan = []; savePlan(); renderPlan(); });
+await page.click('[data-key=fsae_upright]'); await page.click('#planAdd');
+await page.click('[data-key=plate_drill_tap]'); await page.click('#planAdd');
+check((await page.locator('#plan tbody tr').count()) === 2, 'planner holds two parts');
+await page.fill('#plan .plan-qty >> nth=0', '4');
+const planT = await page.evaluate(() => plan.reduce((a, p) => a + planRow(p).machineMin, 0));
+const expectT = await page.evaluate(() => plan.reduce((a, p) => a + p.setupMin + p.qty * (p.cycleS / 60 + p.loadMin), 0));
+check(Math.abs(planT - expectT) < 1e-9 && await page.evaluate(() => plan[0].qty) === 4, 'quantity changes the machine time');
+await page.fill('#planHours', '1'); await page.fill('#planDue', '2000-01-01');
+check(/Over/.test(await page.textContent('#planStats')), 'past due date shows Over');
+const [csvDl] = await Promise.all([page.waitForEvent('download'), page.click('#planCsv')]);
+const csv = (await import('node:fs')).readFileSync(await csvDl.path(), 'utf8').trim().split('\n');
+check(csv.length === 3 && csv[0].startsWith('Part,Qty') && /^"FSAE UPRIGHT[^"]*",4,/.test(csv[1]), 'cost report CSV: header and two parts, names with commas quoted');
+await page.click('#planClear');
+check(await page.evaluate(() => plan.length) === 2 && /again/.test(await page.textContent('#planClear')), 'Clear asks for a second click');
+await page.click('#planClear');
+check(await page.evaluate(() => plan.length) === 0, 'second click clears');
+
+// feedback form: hidden without a key; with one, sends the message (service faked here)
+await page.click('#feedbackBtn');
+check(await page.evaluate(() => document.getElementById('fbForm').hidden), 'email form hidden until a key is set');
+await page.click('#fbClose');
+let sent = null;
+await page.route('https://api.web3forms.com/submit', route => { sent = JSON.parse(route.request().postData()); route.fulfill({ status: 200, contentType: 'application/json', body: '{"success":true}' }); });
+await page.evaluate(() => { WEB3FORMS_KEY = 'test-key'; });
+await page.click('#feedbackBtn');
+await page.fill('#fbMsg', 'Tapping cycle reads wrong');
+await page.fill('#fbFrom', 'someone@example.com');
+await page.click('#fbSend');
+await page.waitForFunction(() => /Sent/.test(document.getElementById('fbStatus').textContent));
+check(sent && sent.access_key === 'test-key' && sent.message === 'Tapping cycle reads wrong' && sent.replyto === 'someone@example.com' && sent.program === '(not included)',
+  'form sends message and reply-to, program left out unless ticked');
+await page.fill('#fbMsg', 'with program'); await page.check('#fbIncl'); await page.click('#fbSend');
+await page.waitForFunction(() => /Sent/.test(document.getElementById('fbStatus').textContent) && document.getElementById('fbMsg').value === '');
+check(sent.program.includes('G21'), 'ticking the box includes the program');
+await page.unroute('https://api.web3forms.com/submit');
+await page.route('https://api.web3forms.com/submit', route => route.fulfill({ status: 400, contentType: 'application/json', body: '{"success":false,"message":"Invalid key"}' }));
+await page.fill('#fbMsg', 'x'); await page.click('#fbSend');
+await page.waitForFunction(() => /Could not send/.test(document.getElementById('fbStatus').textContent));
+check(/Invalid key/.test(await page.textContent('#fbStatus')), 'a failed send says why');
+await page.unroute('https://api.web3forms.com/submit');
+await page.click('#fbClose');
+await page.evaluate(() => { WEB3FORMS_KEY = ''; });
+
 check(errors.length === 0, `no page errors${errors.length ? ': ' + errors.join('; ') : ''}`);
 await browser.close();
 console.log(failures ? `\n${failures} check(s) failed` : '\nall checks passed');

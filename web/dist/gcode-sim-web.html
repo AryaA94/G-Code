@@ -293,6 +293,12 @@ dialog#sheetDialog::backdrop{ background:rgba(0,0,0,.6); }
   body.printing .sheet{ margin:0; padding:0; }
 }
 .fb-options .btn{ text-align:center; text-decoration:none; }
+.fb-form{ display:flex; flex-direction:column; gap:8px; margin-bottom:14px; }
+.fb-form label{ display:flex; flex-direction:column; gap:4px; font-size:12.5px; color:var(--muted); }
+.fb-form label.check{ flex-direction:row; align-items:center; gap:6px; }
+.fb-form textarea{ background:#0e1217; color:#e7eaee; border:1px solid var(--line-2); border-radius:6px; padding:8px; font:13px system-ui, sans-serif; resize:vertical; }
+.fb-send{ display:flex; gap:10px; align-items:center; }
+.fb-or{ margin:6px 0 0; font-size:12.5px; color:var(--muted); }
 .fb-fallback{ margin-top:12px; font-size:12.5px; color:var(--muted); }
 .fb-fallback p{ margin:0 0 6px; }
 .fb-copy{ display:flex; gap:6px; }
@@ -448,6 +454,7 @@ dialog#sheetDialog::backdrop{ background:rgba(0,0,0,.6); }
               <option value="tool">Colour: tool</option>
             </select>
             <label class="check"><input type="checkbox" id="showRapids" checked> rapids</label>
+            <label class="check" title="Show the stock with the material removed"><input type="checkbox" id="showPart"> finished part</label>
           </div>
         </div>
         <div class="viewer" id="viewer">
@@ -484,6 +491,26 @@ dialog#sheetDialog::backdrop{ background:rgba(0,0,0,.6); }
 
       <section class="panel">
         <div class="panel-head">
+          <h2>Part, stock and weight</h2>
+          <span class="meta">material removal simulated on a block of stock</span>
+        </div>
+        <div class="quote-inputs">
+          <label>Stock X, mm<input type="number" id="stX" min="1" step="1"></label>
+          <label>Stock Y, mm<input type="number" id="stY" min="1" step="1"></label>
+          <label>Stock thickness, mm<input type="number" id="stZ" min="0.5" step="0.5"></label>
+          <label>Stock lower-left X<input type="number" id="stX0" step="1"></label>
+          <label>Stock lower-left Y<input type="number" id="stY0" step="1"></label>
+          <label>Blank allowance, mm/side<input type="number" id="stAllow" value="3" min="0" step="0.5"></label>
+          <label>Material price, $/kg<input type="number" id="stPrice" min="0" step="0.5"></label>
+          <label>&nbsp;<button type="button" class="btn secondary small" id="stAuto">Fit stock to program</button></label>
+        </div>
+        <div class="stat-grid" id="partStats"></div>
+        <p class="gen-note" id="partNote">Top of stock is Z0. Volume is simulated on a grid, so expect a percent or two of error;
+          tools without a diameter in the machine config are assumed to be 6 mm. Prices are rough defaults: use your supplier's.</p>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
           <h2>Time by operation</h2>
           <span class="meta">where the cycle time goes; operations are named from the comment before each tool change</span>
         </div>
@@ -509,6 +536,25 @@ dialog#sheetDialog::backdrop{ background:rgba(0,0,0,.6); }
         </details>
         <div class="stat-grid" id="quote"></div>
         <p class="gen-note" id="quoteNote">Machine time only: material, tooling, deburring and margin are not included.</p>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>Season job planner</h2>
+          <div class="toolbar">
+            <button class="btn small" id="planAdd">Add this part</button>
+            <button class="btn secondary small" id="planCsv">Export cost report (CSV)</button>
+            <button class="btn secondary small" id="planClear">Clear</button>
+          </div>
+        </div>
+        <p class="gen-note" style="margin:0 0 10px">Add each part as you check its program: machine time, mass, material and cost add
+          up across the season. Kept in this browser.</p>
+        <div class="quote-inputs">
+          <label>Machine hours available per week<input type="number" id="planHours" value="6" min="0" step="0.5"></label>
+          <label>Parts due by<input type="date" id="planDue"></label>
+        </div>
+        <div class="ops-wrap" id="plan"></div>
+        <div class="stat-grid" id="planStats" style="margin-top:10px"></div>
       </section>
 
       <section class="panel">
@@ -548,6 +594,13 @@ dialog#sheetDialog::backdrop{ background:rgba(0,0,0,.6); }
 <dialog id="feedbackDialog" aria-labelledby="fbTitle">
   <div class="fb-body">
     <h2 id="fbTitle">Send feedback</h2>
+    <div class="fb-form" id="fbForm" hidden>
+      <label>What happened, or what would you like?<textarea id="fbMsg" rows="4" required></textarea></label>
+      <label>Your email, if you'd like a reply (optional)<input type="email" id="fbFrom" autocomplete="email"></label>
+      <label class="check"><input type="checkbox" id="fbIncl"> Include my program (sent privately, only to the developer)</label>
+      <div class="fb-send"><button type="button" class="btn small" id="fbSend">Send</button><span class="meta" id="fbStatus"></span></div>
+      <p class="fb-or">Or post it publicly on GitHub:</p>
+    </div>
     <p class="fb-warn"><b>GitHub issues are public.</b> Anyone on the internet can read them. Don't include programs
       for customer parts or anything your company treats as confidential.</p>
     <div class="fb-options">
@@ -625,6 +678,10 @@ const MATERIALS = [
 
 // Private feedback goes here. Leave empty to hide the email option.
 const FEEDBACK_EMAIL = '';
+// Web3Forms access key (web3forms.com: free, enter your email to get one).
+// With a key, the feedback dialog has a form that emails you directly; the
+// key only allows sending to that one address, so it's safe in the page.
+let WEB3FORMS_KEY = '';  // let: the browser test sets a fake one
 const OWN = { key: 'own', tag: 'YOUR OWN', title: 'Write, paste or open your own program' };
 const OWN_STARTER = `(Your program. Paste G-code here, or use Open file below.)
 (Units mm. Tools T1-T4 are set up in the machine config.)
@@ -730,6 +787,7 @@ function run({ refit = false } = {}) {
   if (refit) fitView();
   if (wasAtEnd || play.t > scene.total) play.t = scene.total;
   renderStats(r);
+  renderPart();
   renderOperations();
   renderToolCost();
   renderQuote();
@@ -895,6 +953,11 @@ function generateProgram() {
   } catch (e) { /* broken JSON: leave it for the engine to report */ }
   try { localStorage.setItem(DRAFT_KEY, out.text); } catch (e) { /* storage blocked */ }
   loadPreset('own');
+  // the plate is as thick as entered, not as deep as the drill breaks through
+  stock.auto = false;
+  stock.sz = parseFloat($('genThick').value);
+  stockInputsFromState();
+  renderPart(); draw();
   $('genCount').textContent = `${holes.length} hole${holes.length === 1 ? '' : 's'} · ${out.summary}`;
   track('generate-' + (hole.tap ? 'tap' : 'drill'));
   document.querySelector('.workspace').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1320,6 +1383,329 @@ function downloadSetupSheet() {
   track('setup-sheet-download');
 }
 
+// ---- stock, material removal and weight ---------------------------------------
+
+// Density g/cm³ and a rough price per kg (USD) for plate/bar stock. Prices
+// are placeholders the user overrides; densities are standard values.
+const MATERIAL_PHYS = {
+  aluminum_6061:    { rho: 2.70, price: 8 },
+  aluminum_7075:    { rho: 2.81, price: 14 },
+  mild_steel:       { rho: 7.85, price: 2 },
+  alloy_steel:      { rho: 7.85, price: 4 },
+  ar400:            { rho: 7.85, price: 5 },
+  ar500:            { rho: 7.85, price: 6 },
+  hardened_600:     { rho: 7.85, price: 7 },
+  stainless_304:    { rho: 8.00, price: 7 },
+  titanium_ti6al4v: { rho: 4.43, price: 45 },
+};
+
+const stock = { auto: true, x0: 0, y0: 0, sx: 100, sy: 100, sz: 10 };
+let partSim = null;  // last simulation, for drawing and the panel
+const PRICE_KEY = 'gcode-sim.prices';
+let prices = {};
+try { prices = JSON.parse(localStorage.getItem(PRICE_KEY) || '{}') || {}; } catch (e) { prices = {}; }
+
+// kind: 'mill', 'drill', 'tap' or 'spot', from the tool's description
+function toolShape(tool) {
+  const t = machineTools()[tool] || {};
+  const c = t.comment || '';
+  // order matters: "10.2 mm drill (M12 tap drill)" is a drill, not a tap
+  const kind = /spot|cent(er|re) drill/i.test(c) ? 'spot' : /drill/i.test(c) ? 'drill' : /\btap\b/i.test(c) ? 'tap' : 'mill';
+  return { d: t.diameter_mm > 0 ? t.diameter_mm : 6, known: t.diameter_mm > 0, ball: /ball/i.test(c), kind };
+}
+
+const STOCK_MARGIN = 5;  // mm of stock left around the area the tools reach
+const SKIN = 0.3;        // a floor thinner than this counts as cut through
+
+// Guess the stock: the area the tools reach plus a margin, top at Z0.
+// Thickness: profiles and bores usually go a little below the bottom, so
+// the deepest milling cut is rounded down to the whole mm when it's within
+// 0.6 mm of one; through drills overshoot by their point (0.3 x D) plus
+// about 1 mm, which is taken off. Taps and spot drills never set it.
+function fitStock(r) {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, rmax = 0, mill = 0, drill = 0;
+  for (const m of r.toolpath.moves) {
+    if (m.type !== 'linear' && m.type !== 'arc') continue;
+    const shape = toolShape(m.tool), rad = shape.d / 2;
+    for (const p of m.points) {
+      if (p[2] >= 0) continue;
+      x0 = Math.min(x0, p[0]); y0 = Math.min(y0, p[1]); x1 = Math.max(x1, p[0]); y1 = Math.max(y1, p[1]);
+      rmax = Math.max(rmax, rad);
+      if (shape.kind === 'mill') mill = Math.max(mill, -p[2]);
+      else if (shape.kind === 'drill') drill = Math.max(drill, -p[2] - 0.3 * shape.d - 1);
+    }
+  }
+  if (!isFinite(x0)) return false;
+  const pad = rmax + STOCK_MARGIN;
+  stock.x0 = Math.floor(x0 - pad); stock.y0 = Math.floor(y0 - pad);
+  stock.sx = Math.ceil(x1 + pad) - stock.x0; stock.sy = Math.ceil(y1 + pad) - stock.y0;
+  const millT = mill - Math.floor(mill) <= 0.6 && Math.floor(mill) >= 1 ? Math.floor(mill) : Math.ceil(mill * 2) / 2;
+  const drillT = Math.round(drill * 2) / 2;
+  stock.sz = Math.max(0.5, millT, drillT);
+  return true;
+}
+
+// Height-map simulation: each cutting move sweeps the tool's tip shape
+// (flat or ball) over a grid; a cell keeps the lowest Z reached.
+function simulateStock(r) {
+  const { x0, y0, sx, sy, sz } = stock;
+  if (!(sx > 0 && sy > 0 && sz > 0)) return null;
+  const cell = Math.max(0.1, Math.max(sx, sy) / 240);
+  const nx = Math.max(1, Math.ceil(sx / cell)), ny = Math.max(1, Math.ceil(sy / cell));
+  const h = new Float32Array(nx * ny);  // 0 = top of stock
+  const bottom = -sz;
+  let unknownTool = false;
+  for (const m of r.toolpath.moves) {
+    if (m.type !== 'linear' && m.type !== 'arc') continue;
+    const shape = toolShape(m.tool);
+    if (!shape.known) unknownTool = true;
+    const rad = shape.d / 2, rc = Math.ceil(rad / cell) + 1;
+    const stamp = (x, y, z) => {
+      if (z >= 0) return;
+      const ci = Math.floor((x - x0) / cell), cj = Math.floor((y - y0) / cell);
+      for (let j = Math.max(0, cj - rc); j <= Math.min(ny - 1, cj + rc); j++) {
+        const dy = y0 + (j + 0.5) * cell - y;
+        for (let i = Math.max(0, ci - rc); i <= Math.min(nx - 1, ci + rc); i++) {
+          const dx = x0 + (i + 0.5) * cell - x, d2 = dx * dx + dy * dy;
+          if (d2 > rad * rad) continue;
+          const zz = Math.max(bottom, shape.ball ? z + rad - Math.sqrt(rad * rad - d2) : z);
+          const k = j * nx + i;
+          if (zz < h[k]) h[k] = zz;
+        }
+      }
+    };
+    const pts = m.points;
+    for (let s = 1; s < pts.length; s++) {
+      const a = pts[s - 1], b = pts[s];
+      if (a[2] >= 0 && b[2] >= 0) continue;
+      const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      const n = Math.max(1, Math.ceil(len / (cell * 0.5)));
+      for (let q = (s === 1 ? 0 : 1); q <= n; q++) {
+        const f = q / n;
+        stamp(a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f);
+      }
+    }
+  }
+  // volumes in mm³
+  const cellA = cell * cell;
+  let removed = 0;
+  for (let k = 0; k < h.length; k++) removed += -h[k] * cellA;
+  // material left: split into connected pieces; a profile cut all the way
+  // through leaves the part and an offcut frame around it
+  const solid = k => h[k] > bottom + SKIN;
+  const comp = new Int32Array(nx * ny).fill(-1);
+  const pieces = [];
+  for (let k0 = 0; k0 < h.length; k0++) {
+    if (comp[k0] >= 0 || !solid(k0)) continue;
+    const id = pieces.length, stack = [k0];
+    let vol = 0, edge = false;
+    comp[k0] = id;
+    while (stack.length) {
+      const k = stack.pop(), i = k % nx, j = (k / nx) | 0;
+      vol += (h[k] - bottom) * cellA;
+      if (i === 0 || j === 0 || i === nx - 1 || j === ny - 1) edge = true;
+      for (const nk of [i > 0 ? k - 1 : -1, i < nx - 1 ? k + 1 : -1, j > 0 ? k - nx : -1, j < ny - 1 ? k + nx : -1]) {
+        if (nk >= 0 && comp[nk] < 0 && solid(nk)) { comp[nk] = id; stack.push(nk); }
+      }
+    }
+    pieces.push({ vol, edge, id });
+  }
+  const inner = pieces.filter(p => !p.edge && p.vol > 0.05 * sx * sy * sz * 0.01);
+  const part = (inner.length ? inner : pieces).reduce((a, p) => (!a || p.vol > a.vol ? p : a), null);
+  const left = pieces.reduce((a, p) => a + p.vol, 0);
+  return { nx, ny, cell, h, bottom, comp, partId: part ? part.id : -1, removed, total: sx * sy * sz, partVol: part ? part.vol : 0,
+    offcut: part ? left - part.vol : 0, pieces: pieces.length, unknownTool };
+}
+
+const fmtMass = g => g >= 1000 ? `${(g / 1000).toFixed(2)} kg` : `${g.toFixed(0)} g`;
+
+function materialInfo() {
+  const key = $('stockSelect').value;
+  const phys = MATERIAL_PHYS[key];
+  const price = prices[key] !== undefined ? prices[key] : phys ? phys.price : 0;
+  return { key, phys, price };
+}
+
+function stockInputsFromState() {
+  $('stX').value = stock.sx; $('stY').value = stock.sy; $('stZ').value = stock.sz;
+  $('stX0').value = stock.x0; $('stY0').value = stock.y0;
+}
+
+function partNumbers() {
+  if (!partSim) return null;
+  const { phys, price } = materialInfo();
+  const allow = Math.max(0, parseFloat($('stAllow').value) || 0);
+  const bx = stock.sx + 2 * allow, by = stock.sy + 2 * allow, bz = stock.sz + allow;
+  const rho = phys ? phys.rho : null;  // g/cm³ = 1e-3 g/mm³
+  const g = mm3 => rho === null ? null : mm3 * rho / 1000;
+  return {
+    removedCm3: partSim.removed / 1000, removedPct: partSim.removed / partSim.total * 100,
+    partG: g(partSim.partVol), offcutG: g(partSim.offcut), stockG: g(partSim.total),
+    blank: [bx, by, bz], blankKg: rho === null ? null : bx * by * bz * rho / 1e6,
+    matCost: rho === null ? null : bx * by * bz * rho / 1e6 * price,
+  };
+}
+
+function renderPart() {
+  const box = $('partStats');
+  if (!result) { box.innerHTML = ''; partSim = null; return; }
+  if (stock.auto && !fitStock(result)) { partSim = null; box.innerHTML = '<div class="diag-empty">No cutting below Z0, so no material is removed.</div>'; return; }
+  if (stock.auto) stockInputsFromState();
+  partSim = simulateStock(result);
+  if (!partSim) { box.innerHTML = '<div class="diag-empty">Set a stock size.</div>'; return; }
+  const n = partNumbers();
+  const { phys, price } = materialInfo();
+  if (document.activeElement !== $('stPrice')) $('stPrice').value = phys ? price : '';
+  const need = 'pick a stock material';
+  const cards = [
+    ['Finished part mass', n.partG === null ? '–' : fmtMass(n.partG), n.partG === null ? need : partSim.pieces > 1 ? `part only, offcut ${fmtMass(n.offcutG)}` : 'everything left on the stock', true],
+    ['Volume removed', `${n.removedCm3.toFixed(1)} cm³`, `${n.removedPct.toFixed(1)}% of the stock`],
+    ['Stock', `${stock.sx} × ${stock.sy} × ${stock.sz}`, n.stockG === null ? 'mm' : `mm · ${fmtMass(n.stockG)}`],
+    ['Blank to order', n.blank.map(v => +v.toFixed(1)).join(' × '), n.blankKg === null ? 'mm, with allowance' : `mm · ${n.blankKg.toFixed(2)} kg`],
+    ['Material cost', n.matCost === null ? '–' : money(n.matCost), phys ? `at $${price}/kg` : need],
+  ];
+  box.innerHTML = cards.map(([label, value, sub, hl]) =>
+    `<div class="stat${hl ? ' highlight' : ''}"><div class="label">${esc(label)}</div><div class="value">${esc(value)}</div><div class="sub">${esc(sub)}</div></div>`).join('');
+  $('partNote').textContent = 'Top of stock is Z0. Volume is simulated on a ' + `${partSim.nx}×${partSim.ny}` +
+    ' grid, so expect a percent or two of error.' + (partSim.unknownTool ? ' Some tools have no diameter in the machine config and were taken as 6 mm.' : '') +
+    ' Prices are rough defaults: use your supplier\'s.';
+}
+
+// The finished part as height-map columns, drawn back to front.
+function drawPart(ctx, P) {
+  const s = partSim;
+  if (!s) return;
+  const step = Math.max(1, Math.ceil(Math.max(s.nx, s.ny) / 110));
+  const cs = s.cell * step;
+  const cells = [];
+  const cy = Math.cos(cam.yaw), sy = Math.sin(cam.yaw), sp = Math.sin(cam.pitch), cp = Math.cos(cam.pitch);
+  for (let j = 0; j < s.ny; j += step) for (let i = 0; i < s.nx; i += step) {
+    // only the finished part: offcuts and slugs that fell away aren't drawn
+    let z = 0, inPart = false;
+    for (let jj = j; jj < Math.min(s.ny, j + step); jj++) for (let ii = i; ii < Math.min(s.nx, i + step); ii++) {
+      const k = jj * s.nx + ii;
+      if (s.comp[k] === s.partId) { inPart = true; z = Math.min(z, s.h[k]); }
+    }
+    if (!inPart || z <= s.bottom + SKIN) continue;
+    const x = stock.x0 + i * s.cell, y = stock.y0 + j * s.cell;
+    const yr = (x + cs / 2) * sy + (y + cs / 2) * cy;
+    cells.push({ x, y, z, d: z * cp - yr * sp });
+  }
+  cells.sort((a, b) => a.d - b.d);
+  const shade = z => {
+    const t = (z - s.bottom) / (0 - s.bottom || 1);
+    const v = Math.round(70 + 120 * t);
+    return `rgb(${v},${v + 8},${v + 22})`;
+  };
+  ctx.lineWidth = 0.5;
+  for (const c of cells) {
+    const quad = (pts, fill) => { ctx.beginPath(); pts.forEach((p, n) => n ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.closePath(); ctx.fillStyle = fill; ctx.fill(); };
+    const x1 = c.x + cs, y1 = c.y + cs, zb = s.bottom;
+    // side walls (only visible from the side), then the top
+    if (cam.pitch > 0.05) {
+      quad([P(c.x, c.y, zb), P(x1, c.y, zb), P(x1, c.y, c.z), P(c.x, c.y, c.z)], 'rgb(52,58,70)');
+      quad([P(x1, c.y, zb), P(x1, y1, zb), P(x1, y1, c.z), P(x1, c.y, c.z)], 'rgb(44,50,60)');
+      quad([P(c.x, c.y, zb), P(c.x, y1, zb), P(c.x, y1, c.z), P(c.x, c.y, c.z)], 'rgb(44,50,60)');
+    }
+    quad([P(c.x, c.y, c.z), P(x1, c.y, c.z), P(x1, y1, c.z), P(c.x, y1, c.z)], shade(c.z));
+  }
+}
+
+// ---- season job planner and cost report -------------------------------------------
+
+const PLAN_KEY = 'gcode-sim.plan';
+let plan = [];
+try { plan = JSON.parse(localStorage.getItem(PLAN_KEY) || '[]') || []; } catch (e) { plan = []; }
+const savePlan = () => { try { localStorage.setItem(PLAN_KEY, JSON.stringify(plan)); } catch (e) { /* storage blocked */ } };
+
+function quoteInputs() {
+  const num = (id, lo) => Math.max(lo, parseFloat($(id).value) || 0);
+  return { rate: num('qRate', 0), setup: num('qSetup', 0), load: num('qLoad', 0) };
+}
+
+function addToPlan() {
+  if (!result) return;
+  const n = partNumbers();
+  const sel = $('machineSelect');
+  const q = quoteInputs();
+  plan.push({
+    name: programTitle($('code').value), qty: 1,
+    machine: sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text : 'none',
+    material: $('stockSelect').value ? $('stockSelect').options[$('stockSelect').selectedIndex].text : 'not set',
+    cycleS: result.stats.time_s.total, setupMin: q.setup, loadMin: q.load, rate: q.rate,
+    tooling: toolingPerPart(),
+    removedCm3: n ? n.removedCm3 : null, partG: n ? n.partG : null,
+    blank: n ? n.blank.map(v => +v.toFixed(1)).join(' x ') : '', blankKg: n ? n.blankKg : null, matCost: n ? n.matCost : null,
+  });
+  savePlan();
+  renderPlan();
+  track('plan-add');
+  toast('Added to the job planner');
+}
+
+function planRow(p) {
+  const machineMin = p.setupMin + p.qty * (p.cycleS / 60 + p.loadMin);
+  const machineEach = machineMin / p.qty / 60 * p.rate;
+  const each = machineEach + (p.matCost || 0) + (p.tooling || 0);
+  return { machineMin, machineEach, each, batch: each * p.qty };
+}
+
+function renderPlan() {
+  const box = $('plan');
+  if (!plan.length) { box.innerHTML = '<div class="diag-empty">No parts yet. Load a part\'s program, set its machine, material and stock, then Add this part.</div>'; $('planStats').innerHTML = ''; return; }
+  box.innerHTML = `<table class="ops"><thead><tr><th>Part</th><th>Qty</th><th>Machine</th><th>Material</th><th>Cycle</th><th>Machine time</th><th>Mass each</th><th>Cost each</th><th></th></tr></thead><tbody>` +
+    plan.map((p, i) => {
+      const r = planRow(p);
+      return `<tr><td class="name">${esc(p.name)}</td><td><input type="number" min="1" step="1" value="${p.qty}" data-i="${i}" class="plan-qty" style="width:64px"></td>
+        <td class="name">${esc(p.machine)}</td><td class="name">${esc(p.material)}</td><td class="num">${fmtDuration(p.cycleS)}</td>
+        <td class="num">${fmtDuration(r.machineMin * 60)}</td><td class="num">${p.partG === null ? '–' : fmtMass(p.partG)}</td>
+        <td class="num">${money(r.each)}</td><td><button type="button" class="linkish plan-del" data-i="${i}">Remove</button></td></tr>`;
+    }).join('') + '</tbody></table>';
+  box.querySelectorAll('.plan-qty').forEach(inp => inp.addEventListener('input', () => {
+    plan[+inp.dataset.i].qty = Math.max(1, Math.round(parseFloat(inp.value) || 1)); savePlan(); renderPlanStats();
+    const r = planRow(plan[+inp.dataset.i]), tds = inp.closest('tr').children;
+    tds[5].textContent = fmtDuration(r.machineMin * 60); tds[7].textContent = money(r.each);
+  }));
+  box.querySelectorAll('.plan-del').forEach(b => b.addEventListener('click', () => { plan.splice(+b.dataset.i, 1); savePlan(); renderPlan(); }));
+  renderPlanStats();
+}
+
+function renderPlanStats() {
+  const hours = plan.reduce((a, p) => a + planRow(p).machineMin, 0) / 60;
+  const cost = plan.reduce((a, p) => a + planRow(p).batch, 0);
+  const mass = plan.reduce((a, p) => a + (p.partG || 0) * p.qty, 0);
+  const perWeek = parseFloat($('planHours').value) || 0;
+  const weeks = perWeek > 0 ? hours / perWeek : Infinity;
+  const due = $('planDue').value ? new Date($('planDue').value + 'T23:59:59') : null;
+  const weeksLeft = due ? (due - new Date()) / (7 * 864e5) : null;
+  const byMachine = {};
+  for (const p of plan) byMachine[p.machine] = (byMachine[p.machine] || 0) + planRow(p).machineMin / 60;
+  const cards = [
+    ['Machine time, all parts', `${hours.toFixed(1)} h`, Object.entries(byMachine).map(([m, h]) => `${m.split(' (')[0]}: ${h.toFixed(1)} h`).join(' · ')],
+    ['Weeks of machine time', isFinite(weeks) ? weeks.toFixed(1) : '–', perWeek ? `at ${perWeek} h/week` : 'set hours per week'],
+    ['Deadline', due ? (weeksLeft >= weeks ? 'On track' : 'Over') : '–',
+      due ? `${Math.max(0, weeksLeft).toFixed(1)} weeks left, ${isFinite(weeks) ? weeks.toFixed(1) : '?'} needed` : 'set a due date', true],
+    ['Total cost', money(cost), 'machine, material and tool wear'],
+    ['Machined mass', mass ? fmtMass(mass) : '–', 'all parts × quantity'],
+  ];
+  $('planStats').innerHTML = cards.map(([label, value, sub, hl]) =>
+    `<div class="stat${hl ? ' highlight' : ''}"><div class="label">${esc(label)}</div><div class="value ${label === 'Deadline' && value === 'Over' ? 'delta-bad' : label === 'Deadline' && value === 'On track' ? 'delta-good' : ''}">${esc(value)}</div><div class="sub">${esc(sub)}</div></div>`).join('');
+}
+
+function planCsv() {
+  const head = ['Part', 'Qty', 'Machine', 'Material', 'Cycle time (min)', 'Batch machine time (h)', 'Volume removed (cm3)',
+    'Part mass (g)', 'Blank (mm)', 'Blank mass (kg)', 'Material cost each ($)', 'Machine cost each ($)', 'Tool wear each ($)',
+    'Total each ($)', 'Total batch ($)'];
+  const q = v => { const s = v === null || v === undefined ? '' : String(v); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+  const f = (v, d) => v === null || v === undefined ? '' : (+v).toFixed(d);
+  const rows = plan.map(p => {
+    const r = planRow(p);
+    return [p.name, p.qty, p.machine, p.material, f(p.cycleS / 60, 2), f(r.machineMin / 60, 2), f(p.removedCm3, 1), f(p.partG, 0),
+      p.blank, f(p.blankKg, 3), f(p.matCost, 2), f(r.machineEach, 2), f(p.tooling, 2), f(r.each, 2), f(r.batch, 2)];
+  });
+  return [head, ...rows].map(r => r.map(q).join(',')).join('\n') + '\n';
+}
+
 // ---- feedback and usage counts ---------------------------------------------
 
 // A pre-filled GitHub issue: what happened, plus the program and machine so
@@ -1377,8 +1763,50 @@ function openFeedback() {
   $('fbEmail').hidden = !FEEDBACK_EMAIL;
   if (FEEDBACK_EMAIL) $('fbEmail').href = feedbackMailto();
   $('fbFallback').hidden = true;
+  $('fbForm').hidden = !WEB3FORMS_KEY;
+  $('fbStatus').textContent = '';
+  $('fbSend').disabled = false;
   if (!dlg.showModal) { window.location.href = feedbackUrl(false); return; }
   dlg.showModal();
+}
+
+// Sends the on-page form through Web3Forms. Nothing leaves the page unless
+// the visitor presses Send; the program only goes if they tick the box.
+// (a plain button, not a <form>: sandboxed viewers block form submission)
+async function sendFeedbackForm() {
+  const msg = $('fbMsg').value.trim();
+  if (!msg) { $('fbStatus').textContent = 'Write a message first.'; return; }
+  const sel = $('machineSelect');
+  const machine = sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text : 'none';
+  const lint = result ? result.lint : null;
+  const body = {
+    access_key: WEB3FORMS_KEY,
+    subject: 'gcode-sim feedback',
+    from_name: 'gcode-sim website',
+    message: msg,
+    machine, material: $('stockSelect').value || 'not set',
+    diagnostics: lint ? `${lint.errors} errors, ${lint.warnings} warnings` : 'none',
+    program: $('fbIncl').checked ? $('code').value.slice(0, 20000) : '(not included)',
+    page: location.href,
+  };
+  const from = $('fbFrom').value.trim();
+  if (from) { body.email = from; body.replyto = from; }
+  $('fbSend').disabled = true;
+  $('fbStatus').textContent = 'Sending…';
+  try {
+    const r = await fetch('https://api.web3forms.com/submit', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify(body),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || j.success === false) throw new Error(j.message || 'HTTP ' + r.status);
+    $('fbStatus').textContent = 'Sent. Thank you!';
+    $('fbMsg').value = '';
+    $('fbSend').disabled = false;
+    track('feedback-form');
+  } catch (err) {
+    $('fbStatus').textContent = 'Could not send (' + (err.message || 'network error') + '). Try the GitHub option below.';
+    $('fbSend').disabled = false;
+  }
 }
 
 function onFeedbackLink(e) {
@@ -1420,6 +1848,7 @@ function startCounting() {
 
 function loadPreset(key) {
   presetKey = key;
+  stock.auto = true;
   if (key === 'own') {
     let draft = null;
     try { draft = localStorage.getItem(DRAFT_KEY); } catch (e) { /* storage blocked */ }
@@ -1642,6 +2071,13 @@ function draw() {
   };
 
   drawBed(ctx, P);
+  if ($('showPart').checked && partSim) {
+    drawPart(ctx, P);
+    drawTool(ctx, P, currentMove());
+    drawTriad(ctx, w, h);
+    updateOverlay(currentMove());
+    return;
+  }
 
   const showRapids = $('showRapids').checked;
   const t = play.t;
@@ -2111,6 +2547,7 @@ function wire() {
   for (const id of ['fbWith', 'fbPlain', 'fbEmail']) $(id).addEventListener('click', onFeedbackLink);
   // closed by script: a <form method="dialog"> is blocked in sandboxed frames
   $('fbClose').addEventListener('click', () => $('feedbackDialog').close());
+  $('fbSend').addEventListener('click', sendFeedbackForm);
   $('feedbackDialog').addEventListener('click', e => { if (e.target === $('feedbackDialog')) $('feedbackDialog').close(); });
   $('fbCopy').addEventListener('click', async () => {
     $('fbLink').select();
@@ -2152,6 +2589,46 @@ function wire() {
     if (q) { $('qRate').value = q.rate; $('qSetup').value = q.setup; $('qLoad').value = q.load; $('qQty').value = q.qty; }
   } catch (e) { /* storage blocked */ }
   for (const id of ['qRate', 'qSetup', 'qLoad', 'qQty']) $(id).addEventListener('input', renderQuote);
+  // stock, weight and planner
+  const stockEdit = () => {
+    stock.auto = false;
+    const v = id => parseFloat($(id).value);
+    if (v('stX') > 0) stock.sx = v('stX');
+    if (v('stY') > 0) stock.sy = v('stY');
+    if (v('stZ') > 0) stock.sz = v('stZ');
+    if (isFinite(v('stX0'))) stock.x0 = v('stX0');
+    if (isFinite(v('stY0'))) stock.y0 = v('stY0');
+    renderPart(); draw();
+  };
+  for (const id of ['stX', 'stY', 'stZ', 'stX0', 'stY0']) $(id).addEventListener('change', stockEdit);
+  $('stAllow').addEventListener('input', () => renderPart());
+  $('stPrice').addEventListener('input', () => {
+    const key = $('stockSelect').value;
+    if (!key) return;
+    prices[key] = Math.max(0, parseFloat($('stPrice').value) || 0);
+    try { localStorage.setItem(PRICE_KEY, JSON.stringify(prices)); } catch (e) { /* storage blocked */ }
+    renderPart();
+  });
+  $('stAuto').addEventListener('click', () => { stock.auto = true; renderPart(); draw(); });
+  $('showPart').addEventListener('change', () => { draw(); track('finished-part'); });
+  $('planAdd').addEventListener('click', addToPlan);
+  // click twice to clear: window.confirm is silently blocked in embedded viewers
+  let clearArmed = 0;
+  $('planClear').addEventListener('click', () => {
+    if (plan.length && Date.now() - clearArmed > 3000) {
+      clearArmed = Date.now();
+      $('planClear').textContent = 'Click again to clear';
+      setTimeout(() => { $('planClear').textContent = 'Clear'; }, 3000);
+      return;
+    }
+    clearArmed = 0; $('planClear').textContent = 'Clear';
+    plan = []; savePlan(); renderPlan();
+  });
+  $('planCsv').addEventListener('click', () => { if (!plan.length) { toast('Add a part first'); return; } download('cost-report.csv', planCsv(), 'text/csv'); track('plan-csv'); });
+  $('planHours').addEventListener('input', renderPlanStats);
+  $('planDue').addEventListener('input', renderPlanStats);
+  renderPlan();
+
   // setup sheet, compare
   $('sheetBtn').addEventListener('click', openSetupSheet);
   $('sheetClose').addEventListener('click', () => $('sheetDialog').close());
